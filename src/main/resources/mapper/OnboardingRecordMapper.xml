@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.overseas.learning.dao.OnboardingRecordMapper">
+
+    <resultMap id="BaseResult" type="OnboardingRecord">
+        <id column="id" property="id"/>
+        <result column="merchant_id" property="merchantId"/>
+        <result column="receive_type" property="receiveType"/>
+        <result column="payment_type" property="paymentType"/>
+        <result column="apply_no" property="applyNo"/>
+        <result column="channel_mct_no" property="channelMctNo"/>
+        <result column="form_data" property="formData"/>
+        <result column="apply_status" property="applyStatus"/>
+        <result column="remark" property="remark"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO onboarding_record (merchant_id, receive_type, payment_type, form_data, apply_status, created_by)
+        VALUES (#{merchantId}, #{receiveType}, #{paymentType}, #{formData}, #{applyStatus}, #{createdBy})
+    </insert>
+
+    <select id="selectById" resultMap="BaseResult">
+        SELECT * FROM onboarding_record WHERE id = #{id}
+    </select>
+
+    <select id="selectByMerchantId" resultMap="BaseResult">
+        SELECT * FROM onboarding_record WHERE merchant_id = #{merchantId} ORDER BY created_at DESC
+    </select>
+
+    <update id="update">
+        UPDATE onboarding_record
+        SET apply_status = #{applyStatus},
+            apply_no = #{applyNo},
+            channel_mct_no = #{channelMctNo},
+            remark = #{remark},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+</mapper>

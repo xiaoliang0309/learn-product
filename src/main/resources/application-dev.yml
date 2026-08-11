@@ -1,0 +1,6 @@
+# ===== 开发环境 =====
+# 使用 H2 数据库，无需安装任何东西
+spring:
+  datasource:
+    url: jdbc:h2:mem:overseas_learning;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver

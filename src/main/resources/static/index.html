@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+        .app { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { font-size: 24px; margin-bottom: 20px; color: #1a1a1a; }
+        .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 18px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+        input, select, textarea { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        input, select { flex: 1; min-width: 150px; }
+        textarea { width: 100%; min-height: 80px; font-family: monospace; }
+        button { padding: 8px 20px; border: none; border-radius: 4px; font-size: 14px; cursor: pointer; }
+        .btn-primary { background: #1677ff; color: #fff; }
+        .btn-primary:hover { background: #4096ff; }
+        .btn-success { background: #52c41a; color: #fff; }
+        .btn-danger { background: #ff4d4f; color: #fff; }
+        .btn-warning { background: #faad14; color: #fff; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+        th { background: #fafafa; font-weight: 600; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+        .badge-success { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+        .badge-warning { background: #fffbe6; color: #faad14; border: 1px solid #ffe58f; }
+        .badge-error { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+        .badge-default { background: #f5f5f5; color: #999; border: 1px solid #d9d9d9; }
+        .response { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: monospace; font-size: 13px; white-space: pre-wrap; max-height: 400px; overflow: auto; margin-top: 10px; }
+        .tabs { display: flex; gap: 0; margin-bottom: 20px; }
+        .tab { padding: 10px 24px; cursor: pointer; border: 1px solid #ddd; background: #fafafa; }
+        .tab:first-child { border-radius: 4px 0 0 4px; }
+        .tab:last-child { border-radius: 0 4px 4px 0; }
+        .tab.active { background: #1677ff; color: #fff; border-color: #1677ff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .action-btns { display: flex; gap: 8px; }
+        .label { font-size: 13px; color: #666; margin-bottom: 4px; }
+        /* ===== Toast 通知 ===== */
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 12px 20px; border-radius: 6px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: toastIn 0.3s ease; max-width: 400px; word-break: break-word; }
+        .toast-success { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+        .toast-error { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+        .toast-info { background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; }
+        @keyframes toastIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+<!-- Toast 通知容器 -->
+<div id="toast-container" class="toast-container"></div>
+
+<div class="app">
+
+    <div class="tabs" id="tabs">
+        <div class="tab active" onclick="switchTab('merchant')">商户管理</div>
+        <div class="tab" onclick="switchTab('onboarding')">进件管理</div>
+    </div>
+
+    <!-- ===== 商户管理 Tab ===== -->
+    <div id="tab-merchant" class="tab-content active">
+        <div class="card">
+            <h2>创建商户</h2>
+            <div class="form-row">
+                <input id="m-fullName" placeholder="商户名称 *" value="Test Merchant">
+                <input id="m-shortName" placeholder="简称" value="Test">
+                <select id="m-bizType">
+                    <option value="1">自收</option>
+                    <option value="2">代收</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <input id="m-email" placeholder="邮箱" value="test@test.com">
+                <input id="m-phone" placeholder="电话" value="1234567890">
+                <input id="m-country" placeholder="国家" value="US">
+            </div>
+            <button class="btn-primary" onclick="createMerchant()">创建商户</button>
+        </div>
+
+        <div class="card">
+            <h2>商户列表</h2>
+            <div class="form-row">
+                <input id="q-name" placeholder="搜索商户名称" oninput="queryMerchants()">
+                <select id="q-bizType" onchange="queryMerchants()">
+                    <option value="">全部收款方式</option>
+                    <option value="1">自收</option>
+                    <option value="2">代收</option>
+                </select>
+                <button class="btn-primary" onclick="queryMerchants()">查询</button>
+            </div>
+            <div id="merchant-list"><p style="color:#999">暂无数据，请先创建商户</p></div>
+        </div>
+    </div>
+
+    <!-- ===== 进件管理 Tab ===== -->
+    <div id="tab-onboarding" class="tab-content">
+        <div class="card">
+            <h2>提交进件申请</h2>
+            <div class="form-row">
+                <input id="o-merchantId" placeholder="商户ID *" value="1">
+                <select id="o-receiveType">
+                    <option value="1">自收</option>
+                    <option value="2">代收</option>
+                </select>
+                <select id="o-paymentType">
+                    <option value="3">PAX</option>
+                    <option value="4">Wizar</option>
+                    <option value="5">Qingo</option>
+                </select>
+            </div>
+            <button class="btn-primary" onclick="submitOnboarding()">提交进件</button>
+        </div>
+
+        <div class="card">
+            <h2>进件记录</h2>
+            <div class="form-row">
+                <input id="o-query-merchantId" placeholder="商户ID" value="1">
+                <button class="btn-primary" onclick="queryOnboarding()">查询</button>
+            </div>
+            <div id="onboarding-list"><p style="color:#999">暂无数据</p></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>API 响应</h2>
+        <div id="response" class="response">点击按钮发送请求，结果将显示在这里</div>
+    </div>
+</div>
+
+<script>
+const BASE = 'http://localhost:8080';
+
+// ===== Toast 通知（右上角弹窗） =====
+function showToast(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 0.3s';
+        setTimeout(() => el.remove(), 300);
+    }, 3000);
+}
+
+function showResponse(data) {
+    document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+}
+
+// 通用请求封装：发起请求 → 显示响应 → 成功/失败 Toast
+async function apiCall(url, options, { onSuccess, onError } = {}) {
+    try {
+        const res = await fetch(url, options);
+        const data = await res.json();
+        showResponse(data);
+        if (data.code === 0) {
+            showToast(data.msg || '操作成功', 'success');
+            if (onSuccess) onSuccess(data);
+        } else {
+            showToast('❌ ' + (data.msg || '操作失败'), 'error');
+            if (onError) onError(data);
+        }
+        return data;
+    } catch (e) {
+        showResponse({error: e.message});
+        showToast('❌ 网络错误: ' + e.message, 'error');
+    }
+}
+
+// ===== 商户管理 =====
+async function createMerchant() {
+    const body = {
+        fullName: document.getElementById('m-fullName').value,
+        shortName: document.getElementById('m-shortName').value,
+        bizType: parseInt(document.getElementById('m-bizType').value),
+        email: document.getElementById('m-email').value,
+        phone: document.getElementById('m-phone').value,
+        country: document.getElementById('m-country').value,
+    };
+    await apiCall(BASE + '/api/merchants', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    }, { onSuccess: () => queryMerchants() });
+}
+
+async function queryMerchants() {
+    const name = document.getElementById('q-name').value;
+    const bizType = document.getElementById('q-bizType').value;
+    let url = BASE + '/api/merchants?page=1&size=20';
+    if (name) url += '&fullName=' + encodeURIComponent(name);
+    if (bizType) url += '&bizType=' + bizType;
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        showResponse(data);
+        if (data.code === 0 && data.data) {
+            renderMerchantList(data.data.list);
+        }
+    } catch (e) { showResponse({error: e.message}); }
+}
+
+async function deleteMerchant(id) {
+    if (!confirm('确定删除商户 ' + id + ' 吗？')) return;
+    await apiCall(BASE + '/api/merchants/' + id, { method: 'DELETE' }, { onSuccess: () => queryMerchants() });
+}
+
+function renderMerchantList(list) {
+    const el = document.getElementById('merchant-list');
+    if (!list || list.length === 0) {
+        el.innerHTML = '<p style="color:#999">暂无数据</p>';
+        return;
+    }
+    let html = `<table>
+        <tr><th>ID</th><th>名称</th><th>收款方式</th><th>邮箱</th><th>状态</th><th>操作</th></tr>`;
+    list.forEach(m => {
+        const bizTypeText = m.bizType === 1 ? '自收' : m.bizType === 2 ? '代收' : '-';
+        const statusBadge = m.status === 1 ? '<span class="badge badge-success">启用</span>' : '<span class="badge badge-error">禁用</span>';
+        html += `<tr>
+            <td>${m.id}</td>
+            <td>${m.fullName}</td>
+            <td>${bizTypeText}</td>
+            <td>${m.email || '-'}</td>
+            <td>${statusBadge}</td>
+            <td><button class="btn-danger" onclick="deleteMerchant(${m.id})">删除</button></td>
+        </tr>`;
+    });
+    html += '</table>';
+    el.innerHTML = html;
+}
+
+// ===== 进件管理 =====
+async function submitOnboarding() {
+    const body = {
+        merchantId: parseInt(document.getElementById('o-merchantId').value),
+        receiveType: parseInt(document.getElementById('o-receiveType').value),
+        paymentType: parseInt(document.getElementById('o-paymentType').value),
+        formData: '{"demo": true}'
+    };
+    await apiCall(BASE + '/api/onboarding', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    }, { onSuccess: () => queryOnboarding() });
+}
+
+async function queryOnboarding() {
+    const merchantId = document.getElementById('o-query-merchantId').value || '1';
+    try {
+        const res = await fetch(BASE + '/api/onboarding?merchantId=' + merchantId);
+        const data = await res.json();
+        showResponse(data);
+        renderOnboardingList(data.data);
+    } catch (e) { showResponse({error: e.message}); }
+}
+
+async function callbackOnboarding(id, approved) {
+    const remark = approved ? '审核通过' : '资料不完整，请修改后重新提交';
+    await apiCall(BASE + '/api/onboarding/' + id + '/callback?approved=' + approved + '&remark=' + encodeURIComponent(remark), {
+        method: 'POST'
+    }, { onSuccess: () => queryOnboarding() });
+}
+
+function renderOnboardingList(list) {
+    const el = document.getElementById('onboarding-list');
+    if (!list || list.length === 0) {
+        el.innerHTML = '<p style="color:#999">暂无数据</p>';
+        return;
+    }
+    let html = `<table>
+        <tr><th>ID</th><th>申请单号</th><th>收款类型</th><th>状态</th><th>渠道商户号</th><th>操作</th></tr>`;
+    list.forEach(r => {
+        const typeText = r.receiveType === 1 ? '自收' : '代收';
+        const statusMap = {0: '草稿', 1: '审核中', 2: '已入驻', 3: '驳回'};
+        const badgeMap = {0: 'badge-default', 1: 'badge-warning', 2: 'badge-success', 3: 'badge-error'};
+        html += `<tr>
+            <td>${r.id}</td>
+            <td>${r.applyNo || '-'}</td>
+            <td>${typeText}</td>
+            <td><span class="badge ${badgeMap[r.applyStatus] || 'badge-default'}">${statusMap[r.applyStatus] || '未知'}</span></td>
+            <td>${r.channelMctNo || '-'}</td>
+            <td class="action-btns">
+                ${r.applyStatus === 1 ? `<button class="btn-success" onclick="callbackOnboarding(${r.id}, true)">通过</button><button class="btn-danger" onclick="callbackOnboarding(${r.id}, false)">驳回</button>` : '-'}
+            </td>
+        </tr>`;
+    });
+    html += '</table>';
+    el.innerHTML = html;
+}
+
+function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.tab:nth-child(${name === 'merchant' ? 1 : 2})`).classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+}
+
+// 页面加载时自动查询
+queryMerchants();
+</script>
+</body>
+</html>
