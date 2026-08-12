@@ -2,12 +2,14 @@ package com.overseas.learning.biz.impl;
 
 import com.overseas.learning.biz.BizMerchantService;
 import com.overseas.learning.common.BusinessException;
+import com.overseas.learning.common.RedisKeys;
 import com.overseas.learning.common.ResultCode;
 import com.overseas.learning.dto.MerchantCreateDto;
 import com.overseas.learning.dto.MerchantQueryDto;
 import com.overseas.learning.dto.PageResult;
 import com.overseas.learning.entity.Merchant;
 import com.overseas.learning.service.MerchantService;
+import com.overseas.learning.service.RedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -55,6 +57,12 @@ public class BizMerchantServiceImpl implements BizMerchantService {
     // 注入的是「数据层」Service，而不是直接注入 Mapper
     // 这样 Biz 层只关心「我要什么数据」，不关心「数据怎么查」
     private final MerchantService merchantService;
+
+    // ★ Redis 场景：注入 Redis 操作封装
+    private final RedisService redisService;
+
+    /** 商户缓存过期时间（秒），10 分钟 */
+    private static final long MERCHANT_CACHE_SECONDS = 600;
 
     @Override
     @Transactional
@@ -108,12 +116,37 @@ public class BizMerchantServiceImpl implements BizMerchantService {
         return merchant;
     }
 
+    /**
+     * ★ 场景A：查询缓存（Cache Aside 模式，旁路缓存）
+     *
+     * 这是最经典的 Redis 用法，流程：
+     *   1. 先查缓存，命中 → 直接返回，不查数据库（快）
+     *   2. 缓存没有 → 查数据库 → 把结果写入缓存 → 返回
+     *   3. 下次再查同一 id，就直接走缓存了
+     *
+     * 好处：数据库压力大减（热点数据都走内存），查询速度快。
+     * qingo 里大量详情查询都是这个套路（商品、门店、设备详情等）。
+     */
     @Override
     public Merchant getById(Long id) {
+        String key = RedisKeys.merchant(id);
+
+        // 1. 先查缓存（用带类型的 get，内部处理好 JSON → Merchant 的转换）
+        Merchant cached = redisService.get(key, Merchant.class);
+        if (cached != null) {
+            log.info("【Biz-缓存】命中缓存，直接返回: key={}", key);
+            return cached;
+        }
+
+        // 2. 缓存没有 → 查数据库
         Merchant merchant = merchantService.getById(id);
         if (merchant == null) {
             throw new BusinessException(ResultCode.MERCHANT_NOT_FOUND);
         }
+
+        // 3. 查到了 → 写入缓存，下次直接命中
+        redisService.set(key, merchant, MERCHANT_CACHE_SECONDS);
+        log.info("【Biz-缓存】查库后写入缓存: key={}", key);
         return merchant;
     }
 
@@ -143,7 +176,12 @@ public class BizMerchantServiceImpl implements BizMerchantService {
 
         // 3. 调用数据层
         merchantService.update(merchant);
-        log.info("【Biz】更新商户成功: id={}", id);
+
+        // 4. ★ 数据变了，删掉旧缓存（下次查询会重新查库并缓存最新值）
+        //    这叫「缓存一致性」：写库后必须让旧缓存失效，否则会读到过期数据。
+        //    为什么「删除」而不是「更新」缓存？删除更简单安全，避免并发下写覆盖问题。
+        redisService.remove(RedisKeys.merchant(id));
+        log.info("【Biz】更新商户成功并清缓存: id={}", id);
         return merchant;
     }
 
@@ -153,6 +191,8 @@ public class BizMerchantServiceImpl implements BizMerchantService {
         // 校验存在性
         getById(id);
         merchantService.deleteById(id);
-        log.info("【Biz】删除商户成功: id={}", id);
+        // 删除后清缓存
+        redisService.remove(RedisKeys.merchant(id));
+        log.info("【Biz】删除商户成功并清缓存: id={}", id);
     }
 }

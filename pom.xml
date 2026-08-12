@@ -45,6 +45,12 @@
             <version>${mybatis-spring-boot.version}</version>
         </dependency>
 
+        <!-- ===== Redis（qingo 项目在用）===== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- ===== 分页插件（项目里在用） ===== -->
         <dependency>
             <groupId>com.github.pagehelper</groupId>

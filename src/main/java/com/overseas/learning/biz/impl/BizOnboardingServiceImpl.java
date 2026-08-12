@@ -2,12 +2,14 @@ package com.overseas.learning.biz.impl;
 
 import com.overseas.learning.biz.BizOnboardingService;
 import com.overseas.learning.common.BusinessException;
+import com.overseas.learning.common.RedisKeys;
 import com.overseas.learning.common.ResultCode;
 import com.overseas.learning.dto.OnboardingSubmitDto;
 import com.overseas.learning.entity.Merchant;
 import com.overseas.learning.entity.OnboardingRecord;
 import com.overseas.learning.service.MerchantService;
 import com.overseas.learning.service.OnboardingService;
+import com.overseas.learning.service.RedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,10 +45,37 @@ public class BizOnboardingServiceImpl implements BizOnboardingService {
     // 注入多个「数据层」Service，Biz 层负责编排它们
     private final OnboardingService onboardingService;
     private final MerchantService merchantService;
+    // ★ Redis 场景：注入 Redis 操作封装
+    private final RedisService redisService;
 
+    /** 防重复提交的锁过期时间（秒）：10 秒内同一商户只能提交一次 */
+    private static final long SUBMIT_LOCK_SECONDS = 10;
+
+    /**
+     * ★ 场景B：防重复提交（qingo 高频用法）
+     *
+     * 问题：用户网络卡/手抖连点「提交」，或前端重试，导致同一商户被重复进件。
+     * 思路：用 Redis 的「SET NX」（不存在才写入）做一把锁——
+     *   第一次提交：锁写入成功 → 放行
+     *   10 秒内再提交：锁还在 → 写入失败 → 直接拦截「请勿重复提交」
+     *   10 秒后锁自动过期 → 可以再次提交
+     *
+     * 为什么用 Redis 而不是数据库唯一索引？
+     *   Redis 的 NX 是原子操作且极快，适合「拦截瞬时重复请求」这种场景；
+     *   数据库唯一索引是「兜底」手段（本项目 merchant 表 email 唯一索引就是）。
+     *   两者通常配合用：Redis 挡前面，唯一索引兜最后。
+     */
     @Override
     @Transactional
     public OnboardingRecord submit(OnboardingSubmitDto dto, String operator) {
+        // ========== 0. 防重复提交（最先做，拦住重复请求）==========
+        String lockKey = RedisKeys.submitOnboarding(dto.getMerchantId());
+        Boolean firstSubmit = redisService.putIfAbsent(lockKey, "1", SUBMIT_LOCK_SECONDS);
+        if (Boolean.FALSE.equals(firstSubmit)) {
+            // key 已存在 → 说明 10 秒内刚提交过 → 拦截
+            throw new BusinessException(2006, "提交太频繁，请 10 秒后再试");
+        }
+
         // ========== 1. 业务前置校验 ==========
         // 校验商户存在且状态正常（跨表校验，必须在 Biz 层做）
         Merchant merchant = merchantService.getById(dto.getMerchantId());
