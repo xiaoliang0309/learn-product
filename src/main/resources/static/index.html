@@ -54,8 +54,9 @@
 <div class="app">
 
     <div class="tabs" id="tabs">
-        <div class="tab active" onclick="switchTab('merchant')">商户管理</div>
-        <div class="tab" onclick="switchTab('onboarding')">进件管理</div>
+        <div class="tab active" onclick="switchTab('merchant', this)">商户管理</div>
+        <div class="tab" onclick="switchTab('onboarding', this)">进件管理</div>
+        <div class="tab" onclick="switchTab('order', this)">订单通知(Kafka)</div>
     </div>
 
     <!-- ===== 商户管理 Tab ===== -->
@@ -122,6 +123,27 @@
         </div>
     </div>
 
+    <!-- ===== 订单通知（Kafka）Tab ===== -->
+    <div id="tab-order" class="tab-content">
+        <div class="card">
+            <h2>下单（触发 Kafka 异步通知）</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px">
+                点击下单 → 后端立即发 Kafka 消息并返回 → 后台消费者异步「发通知」。
+                <br>观察后端控制台日志，可看到【Kafka-生产者】和【Kafka-消费者】跑在不同线程。
+            </p>
+            <div class="form-row">
+                <input id="k-merchantId" placeholder="商户ID *" value="1">
+                <input id="k-merchantName" placeholder="商户名称 *" value="测试商户">
+            </div>
+            <button class="btn-primary" onclick="createOrder()">下单</button>
+        </div>
+
+        <div class="card">
+            <h2>已下单记录（本次会话）</h2>
+            <div id="order-list"><p style="color:#999">暂无订单，点击上方「下单」触发 Kafka 消息</p></div>
+        </div>
+    </div>
+
     <div class="card">
         <h2>API 响应</h2>
         <div id="response" class="response">点击按钮发送请求，结果将显示在这里</div>
@@ -129,7 +151,9 @@
 </div>
 
 <script>
-const BASE = 'http://localhost:8080';
+// 用相对路径：页面从哪个端口打开，就请求哪个端口，天然同源不跨域
+// （之前写死 http://localhost:8080，后端改 9090 后导致跨域）
+const BASE = '';
 
 // ===== Toast 通知（右上角弹窗） =====
 function showToast(msg, type = 'info') {
@@ -290,11 +314,51 @@ function renderOnboardingList(list) {
     el.innerHTML = html;
 }
 
-function switchTab(name) {
+function switchTab(name, el) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelector(`.tab:nth-child(${name === 'merchant' ? 1 : 2})`).classList.add('active');
+    el.classList.add('active');
     document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ===== 订单通知（Kafka） =====
+async function createOrder() {
+    const merchantId = document.getElementById('k-merchantId').value;
+    const merchantName = document.getElementById('k-merchantName').value;
+    if (!merchantId || !merchantName) {
+        showToast('❌ 请填写商户ID和商户名称', 'error');
+        return;
+    }
+    const url = BASE + '/api/orders?merchantId=' + encodeURIComponent(merchantId)
+              + '&merchantName=' + encodeURIComponent(merchantName);
+    await apiCall(url, { method: 'POST' }, {
+        onSuccess: (data) => {
+            // data.data 是订单号
+            addOrderToList(data.data, merchantName);
+            showToast('已下单并发送 Kafka 消息，请到后端控制台看【消费者】日志', 'info');
+        }
+    });
+}
+
+function addOrderToList(orderNo, merchantName) {
+    const el = document.getElementById('order-list');
+    // 第一次下单时清掉「暂无订单」占位
+    if (el.querySelector('p')) el.innerHTML = '';
+    let table = el.querySelector('table');
+    if (!table) {
+        el.innerHTML = `<table>
+            <tr><th>订单号</th><th>商户</th><th>时间</th><th>Kafka</th></tr>
+            <tbody></tbody>
+        </table>`;
+        table = el.querySelector('table');
+    }
+    const time = new Date().toLocaleTimeString();
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${orderNo}</td>
+        <td>${merchantName}</td>
+        <td>${time}</td>
+        <td><span class="badge badge-success">消息已发送</span></td>`;
+    table.querySelector('tbody').prepend(tr);
 }
 
 // 页面加载时自动查询
