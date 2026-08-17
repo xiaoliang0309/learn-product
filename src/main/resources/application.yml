@@ -68,3 +68,18 @@ pagehelper:
 logging:
   level:
     com.overseas.learning: DEBUG
+
+# ===== xxl-job 执行器配置 =====
+# 执行器 = 你的项目（负责真正干活）；调度中心 = xxl-job-admin（负责到点下发命令）
+xxl:
+  job:
+    admin:
+      addresses: http://localhost:9091/xxl-job-admin   # 调度中心地址
+    accessToken: default_token                          # 和调度中心 application.properties 里一致
+    executor:
+      appname: overseas-learning-executor               # 执行器名称（调度中心里要对应）
+      address: ''                                       # 留空=自动获取本机地址
+      ip: ''
+      port: 9999                                        # 执行器端口（调度中心通过它回调你的项目）
+      logpath: logs/xxl-job                             # 任务日志存放目录
+      logretentiondays: 7

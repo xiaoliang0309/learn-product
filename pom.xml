@@ -57,6 +57,13 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- ===== xxl-job 执行器（qingo 在用，学习项目用官方原生包）===== -->
+        <dependency>
+            <groupId>com.xuxueli</groupId>
+            <artifactId>xxl-job-core</artifactId>
+            <version>2.5.0</version>
+        </dependency>
+
         <!-- ===== 分页插件（项目里在用） ===== -->
         <dependency>
             <groupId>com.github.pagehelper</groupId>
