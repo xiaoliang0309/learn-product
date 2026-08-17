@@ -57,6 +57,7 @@
         <div class="tab active" onclick="switchTab('merchant', this)">商户管理</div>
         <div class="tab" onclick="switchTab('onboarding', this)">进件管理</div>
         <div class="tab" onclick="switchTab('order', this)">订单通知(Kafka)</div>
+        <div class="tab" onclick="switchTab('auth', this)">登录拦截(拦截器)</div>
     </div>
 
     <!-- ===== 商户管理 Tab ===== -->
@@ -141,6 +142,54 @@
         <div class="card">
             <h2>已下单记录（本次会话）</h2>
             <div id="order-list"><p style="color:#999">暂无订单，点击上方「下单」触发 Kafka 消息</p></div>
+        </div>
+    </div>
+
+    <!-- ===== 登录拦截（拦截器）Tab ===== -->
+    <div id="tab-auth" class="tab-content">
+        <div class="card">
+            <h2>登录拦截演示（拦截器 + @CurrentUser）</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px">
+                接口 <b>/api/user/info</b> 被拦截器保护：请求头带了正确 token 才能拿到当前用户，否则被拦截返回 401。
+                <br>正确 token 是 <b>test-token</b>（学习项目写死的假 token）。
+            </p>
+            <div class="form-row">
+                <input id="auth-token" placeholder="Auth-Token（留空=不带token）" value="test-token">
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn-primary" onclick="getUserInfo()">带 token 获取当前用户</button>
+                <button class="btn-warning" onclick="getUserInfoNoToken()">不带 token 试试（看 401）</button>
+            </div>
+            <div id="auth-result" style="margin-top:15px"></div>
+        </div>
+
+        <div class="card">
+            <h2>传参演示（@RequestParam + 条件跳过校验）</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px">
+                接口 <b>/api/user/info2</b> 接收 <b>type</b> 参数：<b>type=1</b> 时跳过登录校验（不用 token），否则正常校验。
+            </p>
+            <div class="form-row">
+                <select id="param-type">
+                    <option value="">不传 type（需登录）</option>
+                    <option value="1">type=1（跳过登录校验）</option>
+                    <option value="2">type=2（需登录）</option>
+                </select>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn-primary" onclick="testParam()">带 token 调 info2</button>
+                <button class="btn-warning" onclick="testParamNoToken()">不带 token 调 info2</button>
+            </div>
+            <div id="param-result" style="margin-top:15px"></div>
+        </div>
+
+        <div class="card">
+            <h2>定时任务说明</h2>
+            <p style="color:#666;font-size:14px;line-height:1.8">
+                定时任务是<b>后端自动执行</b>的，不需要人点，所以没有按钮。<br>
+                学习项目里有一个 <b>每分钟统计商户总数</b> 的定时任务（@Scheduled）。<br>
+                想看效果：打开<b>后端控制台</b>，每到「每分钟的第 0 秒」就会打印一行
+                <code style="background:#f5f5f5;padding:2px 6px;border-radius:4px">【定时任务】每分钟统计商户总数: total=x</code>
+            </p>
         </div>
     </div>
 
@@ -359,6 +408,90 @@ function addOrderToList(orderNo, merchantName) {
         <td>${time}</td>
         <td><span class="badge badge-success">消息已发送</span></td>`;
     table.querySelector('tbody').prepend(tr);
+}
+
+// ===== 登录拦截演示（拦截器 + @CurrentUser） =====
+// 带 token 调 /api/user/info
+async function getUserInfo() {
+    const token = document.getElementById('auth-token').value;
+    await callUserInfo(token);
+}
+
+// 不带 token 调（演示 401 拦截）
+async function getUserInfoNoToken() {
+    await callUserInfo('');
+}
+
+// 统一的调用逻辑：根据是否带 token，展示放行或拦截的结果
+async function callUserInfo(token) {
+    const resultEl = document.getElementById('auth-result');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Auth-Token'] = token;
+
+    try {
+        const res = await fetch(BASE + '/api/user/info', { headers });
+        // 注意：401 时 res.ok=false，要单独处理（拦截器返回的是 {code:401,...}）
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+        showResponse(data);
+
+        if (res.status === 200 && data.code === 0) {
+            resultEl.innerHTML = `<div style="background:#f6ffed;border:1px solid #b7eb8f;color:#52c41a;padding:12px 16px;border-radius:6px">
+                ✅ 拦截器放行，@CurrentUser 注入成功：<br>
+                <b>uid</b>=${data.data.uid}　<b>用户名</b>=${data.data.username}　<b>商户ID</b>=${data.data.merchantId}
+            </div>`;
+            showToast('登录成功，拿到当前用户', 'success');
+        } else if (res.status === 401 || data.code === 401) {
+            resultEl.innerHTML = `<div style="background:#fff2f0;border:1px solid #ffccc7;color:#ff4d4f;padding:12px 16px;border-radius:6px">
+                ❌ 被拦截器拦截了：未登录（401）—— 请求根本没进 Controller，在拦截器就被挡下
+            </div>`;
+            showToast('❌ 401 未登录，被拦截器拦截', 'error');
+        } else {
+            resultEl.innerHTML = '';
+        }
+    } catch (e) {
+        showResponse({ error: e.message });
+        showToast('❌ 网络错误: ' + e.message, 'error');
+    }
+}
+
+// ===== 传参演示（@RequestParam + 条件跳过校验） =====
+async function testParam() {
+    await callInfo2('test-token');
+}
+async function testParamNoToken() {
+    await callInfo2('');
+}
+async function callInfo2(token) {
+    const resultEl = document.getElementById('param-result');
+    const type = document.getElementById('param-type').value;
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Auth-Token'] = token;
+
+    const url = BASE + '/api/user/info2' + (type ? '?type=' + type : '');
+    try {
+        const res = await fetch(url, { headers });
+        const text = await res.text();
+        let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
+        showResponse(data);
+
+        if (res.status === 200 && data.code === 0) {
+            const isSkipped = typeof data.data === 'string';
+            resultEl.innerHTML = `<div style="background:#f6ffed;border:1px solid #b7eb8f;color:#52c41a;padding:12px 16px;border-radius:6px">
+                ✅ 请求成功（type=${type || '未传'}）<br>
+                ${isSkipped ? '结果：' + data.data + '（拦截器放行了，没校验 token）' : '结果：拿到当前用户 ' + JSON.stringify(data.data)}
+            </div>`;
+        } else if (res.status === 401 || data.code === 401) {
+            resultEl.innerHTML = `<div style="background:#fff2f0;border:1px solid #ffccc7;color:#ff4d4f;padding:12px 16px;border-radius:6px">
+                ❌ 401 被拦截（type=${type || '未传'} 不是 1，且没带 token）
+            </div>`;
+        }
+    } catch (e) {
+        showResponse({ error: e.message });
+        showToast('❌ 网络错误: ' + e.message, 'error');
+    }
 }
 
 // 页面加载时自动查询
