@@ -45,7 +45,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/api/merchants",             // 商户接口暂不拦（方便你测试）
                         "/api/onboarding/**",         // 进件接口暂不拦
-                        "/api/orders"                 // 订单接口暂不拦（Kafka 演示用）
+                        "/api/orders",                // 订单接口暂不拦（Kafka 演示用）
+                        "/merchant/**"                // Feign 演示接口暂不拦（路径是 /merchant/remote/{id}）
                 );
         // 说明：学习项目为了不挡你前面的测试，只拦「需要登录」的演示接口。
         // qingo 真实项目是 addPathPatterns("/**") 几乎全拦，只放行登录/注册等少数接口。

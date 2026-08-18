@@ -58,6 +58,7 @@
         <div class="tab" onclick="switchTab('onboarding', this)">进件管理</div>
         <div class="tab" onclick="switchTab('order', this)">订单通知(Kafka)</div>
         <div class="tab" onclick="switchTab('auth', this)">登录拦截(拦截器)</div>
+        <div class="tab" onclick="switchTab('feign', this)">微服务(Feign)</div>
     </div>
 
     <!-- ===== 商户管理 Tab ===== -->
@@ -189,6 +190,33 @@
                 学习项目里有一个 <b>每分钟统计商户总数</b> 的定时任务（@Scheduled）。<br>
                 想看效果：打开<b>后端控制台</b>，每到「每分钟的第 0 秒」就会打印一行
                 <code style="background:#f5f5f5;padding:2px 6px;border-radius:4px">【定时任务】每分钟统计商户总数: total=x</code>
+            </p>
+        </div>
+    </div>
+
+    <!-- ===== 微服务（Feign）Tab ===== -->
+    <div id="tab-feign" class="tab-content">
+        <div class="card">
+            <h2>微服务远程调用（Nacos + Feign）</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px;line-height:1.7">
+                本页面是<b>服务A</b>（learning-mct-api, 9090）。点按钮后，服务A <b>不查自己的数据库</b>，
+                而是通过 Feign 按服务名去 Nacos 找<b>服务B</b>（merchant-service-b, 9095），远程调用它拿数据。<br>
+                链路：服务A → Feign → Nacos 查地址 → 服务B → 返回
+            </p>
+            <div class="form-row">
+                <input id="feign-id" placeholder="商户ID" value="1">
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn-primary" onclick="callFeign()">通过 Feign 调用服务B 查商户</button>
+            </div>
+            <div id="feign-result" style="margin-top:15px"></div>
+        </div>
+
+        <div class="card">
+            <h2>验证降级（fallback）</h2>
+            <p style="color:#666;font-size:14px;line-height:1.8">
+                把服务B 停掉（关掉它的进程），再点上面的按钮，会走 <b>fallback 降级</b>，
+                返回兜底提示「调用商户服务失败」，而不是直接报错——这就是微服务的容错。
             </p>
         </div>
     </div>
@@ -491,6 +519,37 @@ async function callInfo2(token) {
     } catch (e) {
         showResponse({ error: e.message });
         showToast('❌ 网络错误: ' + e.message, 'error');
+    }
+}
+
+// ===== 微服务（Feign）演示 =====
+async function callFeign() {
+    const resultEl = document.getElementById('feign-result');
+    const id = document.getElementById('feign-id').value || '1';
+    resultEl.innerHTML = '<p style="color:#999">调用中...</p>';
+    try {
+        const res = await fetch(BASE + '/merchant/remote/' + id);
+        const data = await res.json();
+        showResponse(data);
+        if (data.code === 0 && data.data) {
+            // 成功：说明服务B正常返回了数据
+            resultEl.innerHTML = `<div style="background:#f6ffed;border:1px solid #b7eb8f;color:#52c41a;padding:12px 16px;border-radius:6px">
+                ✅ 调用成功！服务A 通过 Feign 从服务B(merchant-service-b) 拿到了数据：<br>
+                <b>商户ID</b>=${data.data.id}　<b>名称</b>=${data.data.fullName}　<b>邮箱</b>=${data.data.email || '-'}
+                <br><span style="color:#888;font-size:12px">这条数据来自服务B，不是服务A自己查的</span>
+            </div>`;
+            showToast('Feign 调用服务B 成功', 'success');
+        } else {
+            // 走了 fallback 降级
+            resultEl.innerHTML = `<div style="background:#fff7e6;border:1px solid #ffd591;color:#fa8c16;padding:12px 16px;border-radius:6px">
+                ⚠️ 走了降级兜底（fallback）：${data.msg || '调用失败'}<br>
+                <span style="color:#888;font-size:12px">这说明服务B 可能没启动。去启动服务B(9095)再试</span>
+            </div>`;
+            showToast('走了降级兜底', 'info');
+        }
+    } catch (e) {
+        showResponse({ error: e.message });
+        resultEl.innerHTML = `<div style="background:#fff2f0;border:1px solid #ffccc7;color:#ff4d4f;padding:12px 16px;border-radius:6px">❌ 网络错误: ${e.message}</div>`;
     }
 }
 
