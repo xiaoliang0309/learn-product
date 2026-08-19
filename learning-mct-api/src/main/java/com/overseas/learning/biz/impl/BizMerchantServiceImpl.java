@@ -61,6 +61,9 @@ public class BizMerchantServiceImpl implements BizMerchantService {
     // ★ Redis 场景：注入 Redis 操作封装
     private final RedisService redisService;
 
+    // ★ MongoDB 场景：注入操作日志服务（业务数据在 MySQL，操作日志写 MongoDB）
+    private final com.overseas.learning.service.OperateLogService operateLogService;
+
     /** 商户缓存过期时间（秒），10 分钟 */
     private static final long MERCHANT_CACHE_SECONDS = 600;
 
@@ -111,6 +114,12 @@ public class BizMerchantServiceImpl implements BizMerchantService {
         // 如果这里还需要同时写多张表（比如商户 + 门店 + 银行账户），
         // 就在这一个事务里调用多个数据层 Service，这就是 Biz 层存在的意义
         merchantService.save(merchant);
+
+        // ========== 5. 写操作日志到 MongoDB ==========
+        // 业务数据(MySQL)已写入，这里往 MongoDB 记一条「操作日志」。
+        // 这就是 qingo 里 MySQL 和 MongoDB 的分工：业务数据 vs 操作流水。
+        operateLogService.log("merchant", merchant.getId(), "create",
+                "创建商户[" + merchant.getFullName() + "]", "admin");
 
         log.info("【Biz】创建商户成功: id={}, name={}", merchant.getId(), merchant.getFullName());
         return merchant;
@@ -181,6 +190,8 @@ public class BizMerchantServiceImpl implements BizMerchantService {
         //    这叫「缓存一致性」：写库后必须让旧缓存失效，否则会读到过期数据。
         //    为什么「删除」而不是「更新」缓存？删除更简单安全，避免并发下写覆盖问题。
         redisService.remove(RedisKeys.merchant(id));
+        // 写操作日志到 MongoDB
+        operateLogService.log("merchant", id, "update", "更新商户[" + merchant.getFullName() + "]", "admin");
         log.info("【Biz】更新商户成功并清缓存: id={}", id);
         return merchant;
     }
@@ -193,6 +204,8 @@ public class BizMerchantServiceImpl implements BizMerchantService {
         merchantService.deleteById(id);
         // 删除后清缓存
         redisService.remove(RedisKeys.merchant(id));
+        // 写操作日志到 MongoDB
+        operateLogService.log("merchant", id, "delete", "删除商户", "admin");
         log.info("【Biz】删除商户成功并清缓存: id={}", id);
     }
 }

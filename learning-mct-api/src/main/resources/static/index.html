@@ -59,6 +59,7 @@
         <div class="tab" onclick="switchTab('order', this)">订单通知(Kafka)</div>
         <div class="tab" onclick="switchTab('auth', this)">登录拦截(拦截器)</div>
         <div class="tab" onclick="switchTab('feign', this)">微服务(Feign)</div>
+        <div class="tab" onclick="switchTab('mongo', this)">操作日志(MongoDB)</div>
     </div>
 
     <!-- ===== 商户管理 Tab ===== -->
@@ -218,6 +219,23 @@
                 把服务B 停掉（关掉它的进程），再点上面的按钮，会走 <b>fallback 降级</b>，
                 返回兜底提示「调用商户服务失败」，而不是直接报错——这就是微服务的容错。
             </p>
+        </div>
+    </div>
+
+    <!-- ===== 操作日志（MongoDB）Tab ===== -->
+    <div id="tab-mongo" class="tab-content">
+        <div class="card">
+            <h2>MySQL 业务数据 vs MongoDB 操作日志</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px;line-height:1.7">
+                去「商户管理」Tab 新增/更新/删除商户时，系统会<b>同时写两份数据</b>：<br>
+                · 业务数据 → 写 <b>MySQL</b>（merchant 表）<br>
+                · 操作日志 → 写 <b>MongoDB</b>（doc_operate_log 集合）<br>
+                点下面按钮，就能看到 MongoDB 里记录的操作流水。
+            </p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn-primary" onclick="loadOperateLogs()">查看 MongoDB 操作日志</button>
+            </div>
+            <div id="mongo-list" style="margin-top:15px"><p style="color:#999">点击按钮查看操作日志</p></div>
         </div>
     </div>
 
@@ -551,6 +569,50 @@ async function callFeign() {
         showResponse({ error: e.message });
         resultEl.innerHTML = `<div style="background:#fff2f0;border:1px solid #ffccc7;color:#ff4d4f;padding:12px 16px;border-radius:6px">❌ 网络错误: ${e.message}</div>`;
     }
+}
+
+// ===== MongoDB 操作日志演示 =====
+async function loadOperateLogs() {
+    const el = document.getElementById('mongo-list');
+    el.innerHTML = '<p style="color:#999">加载中...</p>';
+    try {
+        const res = await fetch(BASE + '/operate-log/list');
+        const data = await res.json();
+        showResponse(data);
+        if (data.code === 0 && data.data) {
+            renderOperateLogs(data.data);
+        }
+    } catch (e) {
+        showResponse({ error: e.message });
+        el.innerHTML = `<p style="color:#ff4d4f">加载失败: ${e.message}</p>`;
+    }
+}
+
+function renderOperateLogs(list) {
+    const el = document.getElementById('mongo-list');
+    if (!list || list.length === 0) {
+        el.innerHTML = '<p style="color:#999">暂无操作日志，先去「商户管理」新增/修改/删除一个商户再来查看</p>';
+        return;
+    }
+    // 按时间倒序
+    list.sort((a, b) => new Date(b.operateTime) - new Date(a.operateTime));
+    const typeMap = { create: 'badge-success', update: 'badge-warning', delete: 'badge-error' };
+    const typeText = { create: '新增', update: '更新', delete: '删除' };
+    let html = `<table>
+        <tr><th>时间</th><th>操作</th><th>对象</th><th>内容</th><th>操作人</th></tr>`;
+    list.forEach(r => {
+        const time = r.operateTime ? new Date(r.operateTime).toLocaleString() : '-';
+        const badge = typeMap[r.operateType] || 'badge-default';
+        html += `<tr>
+            <td>${time}</td>
+            <td><span class="badge ${badge}">${typeText[r.operateType] || r.operateType}</span></td>
+            <td>${r.targetType}#${r.targetId}</td>
+            <td>${r.content || '-'}</td>
+            <td>${r.operator || '-'}</td>
+        </tr>`;
+    });
+    html += '</table>';
+    el.innerHTML = html;
 }
 
 // 页面加载时自动查询
