@@ -1,5 +1,6 @@
 package com.overseas.learning.service;
 
+import com.overseas.learning.dto.DocEsOrderSearchRequest;
 import com.overseas.learning.entity.DocEsOrder;
 
 import java.util.List;
@@ -31,16 +32,13 @@ public interface DocEsOrderService {
     void delete(String id);
 
     /**
-     * 分页搜索订单
+     * 分页搜索订单（★ 对齐 qingo：用 request 对象传条件）
      *
-     * @param keyword    商品名称模糊搜索（null 则不搜）
-     * @param status     订单状态（null 则不过滤）
-     * @param mctId      商户ID（null 则不过滤）
-     * @param shopCode   店铺编码（null 则不过滤）
-     * @param page       页码（从 1 开始）
-     * @param size       每页条数
+     * @param request 查询条件（字段为 null 则不加该条件）
+     * @param page    页码（从 1 开始）
+     * @param size    每页条数
      */
-    Map<String, Object> search(String keyword, Integer status, Long mctId, String shopCode, int page, int size);
+    Map<String, Object> search(DocEsOrderSearchRequest request, int page, int size);
 
     /** 统计各状态的订单数量（聚合查询，对齐 qingo 的 getGroupCount） */
     Map<String, Long> countByStatus(Long mctId);

@@ -61,6 +61,7 @@
         <div class="tab" onclick="switchTab('feign', this)">微服务(Feign)</div>
         <div class="tab" onclick="switchTab('mongo', this)">操作日志(MongoDB)</div>
         <div class="tab" onclick="switchTab('es', this)">订单搜索(ES)</div>
+        <div class="tab" onclick="switchTab('dual', this)">订单双写(MySQL+ES)</div>
     </div>
 
     <!-- ===== 商户管理 Tab ===== -->
@@ -320,6 +321,71 @@
                 <button class="btn-primary" onclick="esStats()">统计</button>
             </div>
             <div id="es-stats-result" class="response">点「统计」查看结果</div>
+        </div>
+    </div>
+
+    <!-- ===== 订单双写(MySQL+ES) Tab ===== -->
+    <div id="tab-dual" class="tab-content">
+        <div class="card">
+            <h2>数据双写：MySQL（主数据） + ES（搜索副本）</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px;line-height:1.7">
+                <b>核心思想</b>（对齐 qingo）：下单时<b>同时写两份</b>——<br>
+                · <b>MySQL</b> = 主数据，保证业务正确（事务、精确查询）<br>
+                · <b>ES</b> = 搜索副本，保证搜索快（倒排索引、模糊搜索、聚合）<br>
+                · <b>ES 的 id = MySQL 的自增 id</b>，两边靠 id 对齐<br>
+                · 搜索走 ES，详情走 MySQL；不一致时用「同步」把 MySQL 刷到 ES 修正
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>① 下单（同时写 MySQL + ES）</h2>
+            <div class="form-row">
+                <input id="d-merchantId" placeholder="商户ID *" value="1001" type="number">
+                <input id="d-shopId" placeholder="店铺ID" value="1" type="number">
+                <input id="d-amount" placeholder="金额(分) *" value="500" type="number">
+            </div>
+            <div class="form-row">
+                <select id="d-paymentMethod">
+                    <option value="WECHAT">微信</option>
+                    <option value="ALIPAY">支付宝</option>
+                    <option value="STRIPE">Stripe</option>
+                </select>
+                <button class="btn-primary" onclick="dualCreateOrder()">下单(双写)</button>
+            </div>
+            <div id="d-create-result" class="response">下单后显示写入结果</div>
+        </div>
+
+        <div class="card">
+            <h2>② 对比两边数据（看一致性）</h2>
+            <div class="form-row">
+                <button class="btn-primary" onclick="dualCompare()">对比 MySQL vs ES</button>
+                <button class="btn-success" onclick="dualSync()">手动同步 MySQL→ES</button>
+            </div>
+            <div class="form-row" style="gap:20px">
+                <div style="flex:1">
+                    <div class="label">MySQL（主数据）</div>
+                    <div id="d-mysql-result" class="response" style="min-height:80px">点「对比」查看</div>
+                </div>
+                <div style="flex:1">
+                    <div class="label">ES（搜索副本）</div>
+                    <div id="d-es-result" class="response" style="min-height:80px">点「对比」查看</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>③ ES 搜索（只查 ES，支持模糊搜索）</h2>
+            <div class="form-row">
+                <input id="d-esKeyword" placeholder="订单号关键词(如 ORD)">
+                <select id="d-esStatus">
+                    <option value="">全部状态</option>
+                    <option value="0">待支付</option>
+                    <option value="1">已支付</option>
+                    <option value="2">已退款</option>
+                </select>
+                <button class="btn-primary" onclick="dualEsSearch()">ES 搜索</button>
+            </div>
+            <div id="d-essearch-result" class="response">点「ES 搜索」查看（走 ES，毫秒级）</div>
         </div>
     </div>
 
@@ -815,6 +881,115 @@ async function esDeleteAll() {
         if (json.code === 0) { showToast('✅ 已清空', 'success'); esSearch(); esStats(); }
         else { showToast('❌ ' + json.msg, 'error'); }
     } catch (e) { showToast('❌ 请求失败', 'error'); }
+}
+
+// ===== 订单双写（MySQL + ES） =====
+async function dualCreateOrder() {
+    const merchantId = document.getElementById('d-merchantId').value;
+    const shopId = document.getElementById('d-shopId').value;
+    const amount = document.getElementById('d-amount').value;
+    const paymentMethod = document.getElementById('d-paymentMethod').value;
+    if (!merchantId || !amount) { showToast('❌ 商户ID和金额必填', 'error'); return; }
+    // 对齐 qingo：用 JSON body 传 DTO，不再用 @RequestParam 拼参数
+    const body = { merchantId: Number(merchantId), shopId: shopId ? Number(shopId) : null, amount: Number(amount), receiveType: 1, paymentMethod };
+    try {
+        const res = await fetch(`${BASE}/dual/order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const json = await res.json();
+        const el = document.getElementById('d-create-result');
+        if (json.code === 0 && json.data) {
+            const o = json.data;
+            el.innerHTML = `<span style="color:#52c41a">✅ 下单成功，已同时写 MySQL + ES</span>
+订单号: ${o.orderNo}
+MySQL id: ${o.id}  ←→  ES id: ${o.id}（两边用同一 id 对齐）
+商户: ${o.merchantId}  金额: ${(o.amount/100).toFixed(2)}  状态: 待支付(0)`;
+            showToast('✅ 双写成功', 'success');
+            dualCompare();
+        } else { el.textContent = JSON.stringify(json, null, 2); }
+    } catch (e) { showToast('❌ 请求失败', 'error'); }
+}
+
+async function dualCompare() {
+    try {
+        const res = await fetch(`${BASE}/dual/compare`);
+        const json = await res.json();
+        if (json.code === 0 && json.data) {
+            const d = json.data;
+            // MySQL 侧
+            const statusMap = { 0: '<span class="badge badge-warning">待支付</span>', 1: '<span class="badge badge-success">已支付</span>', 2: '<span class="badge badge-error">已退款</span>' };
+            let mysqlHtml = `<p style="color:#1677ff">共 ${d.mysqlCount} 条</p>`;
+            mysqlHtml += '<table><tr><th>ID</th><th>订单号</th><th>金额</th><th>状态</th><th>操作</th></tr>';
+            (d.mysqlList || []).forEach(o => {
+                mysqlHtml += `<tr><td>${o.id}</td><td>${o.orderNo}</td><td>${(o.amount/100).toFixed(2)}</td><td>${statusMap[o.status]||o.status}</td>
+                    <td>${o.status===0?`<button class="btn-success" onclick="dualPay(${o.id})">支付</button>`:''}<button class="btn-danger" onclick="dualDelete(${o.id},'${o.id}')">删</button></td></tr>`;
+            });
+            mysqlHtml += '</table>';
+            document.getElementById('d-mysql-result').innerHTML = mysqlHtml;
+            // ES 侧
+            let esHtml = `<p style="color:#1677ff">共 ${d.esCount} 条</p>`;
+            esHtml += '<table><tr><th>ES_ID</th><th>商品/单号</th><th>商户</th><th>状态</th></tr>';
+            (d.esList || []).forEach(o => {
+                esHtml += `<tr><td>${o.id}</td><td>${o.goodsNamesText||'-'}</td><td>${o.mctName||o.mctId||'-'}</td><td>${statusMap[o.status]||o.status}</td></tr>`;
+            });
+            esHtml += '</table>';
+            document.getElementById('d-es-result').innerHTML = esHtml;
+        }
+    } catch (e) { showToast('❌ 对比失败: ' + e.message, 'error'); }
+}
+
+async function dualPay(id) {
+    try {
+        const res = await fetch(`${BASE}/dual/pay?id=${id}`, { method: 'POST' });
+        const json = await res.json();
+        if (json.code === 0) { showToast('✅ 支付成功，MySQL+ES 状态已同步', 'success'); dualCompare(); }
+        else { showToast('❌ ' + json.msg, 'error'); }
+    } catch (e) { showToast('❌ 请求失败', 'error'); }
+}
+
+async function dualSync() {
+    try {
+        const res = await fetch(`${BASE}/dual/sync`, { method: 'POST' });
+        const json = await res.json();
+        if (json.code === 0) { showToast(`✅ 已同步 ${json.data} 条 MySQL→ES`, 'success'); dualCompare(); }
+        else { showToast('❌ ' + json.msg, 'error'); }
+    } catch (e) { showToast('❌ 请求失败', 'error'); }
+}
+
+async function dualDelete(id, esDocId) {
+    if (!confirm('确认删除？会同时删 MySQL + ES')) return;
+    try {
+        const res = await fetch(`${BASE}/dual/order?id=${id}&esDocId=${esDocId}`, { method: 'DELETE' });
+        const json = await res.json();
+        if (json.code === 0) { showToast('✅ 已删除 MySQL + ES', 'success'); dualCompare(); }
+        else { showToast('❌ ' + json.msg, 'error'); }
+    } catch (e) { showToast('❌ 请求失败', 'error'); }
+}
+
+async function dualEsSearch() {
+    const keyword = document.getElementById('d-esKeyword').value;
+    const status = document.getElementById('d-esStatus').value;
+    const params = new URLSearchParams();
+    if (keyword) params.append('keyword', keyword);
+    if (status !== '') params.append('status', status);
+    try {
+        const res = await fetch(`${BASE}/dual/es?${params}`);
+        const json = await res.json();
+        const el = document.getElementById('d-essearch-result');
+        if (json.code === 0 && json.data) {
+            const list = json.data.list || [];
+            const statusMap = { 0: '<span class="badge badge-warning">待支付</span>', 1: '<span class="badge badge-success">已支付</span>', 2: '<span class="badge badge-error">已退款</span>' };
+            let html = `<p style="color:#1677ff">ES 命中 ${json.data.total} 条（走倒排索引，毫秒级）</p>`;
+            html += '<table><tr><th>ES_ID</th><th>关键词</th><th>商户</th><th>状态</th></tr>';
+            list.forEach(o => {
+                html += `<tr><td>${o.id}</td><td>${o.goodsNamesText||'-'}</td><td>${o.mctName||o.mctId||'-'}</td><td>${statusMap[o.status]||o.status}</td></tr>`;
+            });
+            html += '</table>';
+            el.innerHTML = html;
+        } else { el.textContent = JSON.stringify(json, null, 2); }
+    } catch (e) { document.getElementById('d-essearch-result').textContent = '请求失败: ' + e.message; }
 }
 </script>
 </body>

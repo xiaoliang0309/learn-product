@@ -1,5 +1,6 @@
 package com.overseas.learning.service.impl;
 
+import com.overseas.learning.dto.DocEsOrderSearchRequest;
 import com.overseas.learning.entity.DocEsOrder;
 import com.overseas.learning.service.DocEsOrderService;
 import lombok.RequiredArgsConstructor;
@@ -123,10 +124,9 @@ public class DocEsOrderServiceImpl implements DocEsOrderService {
     }
 
     @Override
-    public Map<String, Object> search(String keyword, Integer status, Long mctId, String shopCode,
-                                       int page, int size) {
+    public Map<String, Object> search(DocEsOrderSearchRequest request, int page, int size) {
         // 1. 构建查询条件（BoolQueryBuilder = WHERE + AND/OR）
-        BoolQueryBuilder boolQueryBuilder = buildQuery(keyword, status, mctId, shopCode);
+        BoolQueryBuilder boolQueryBuilder = buildQuery(request);
 
         // 2. 组装查询（条件 + 排序 + 分页）
         NativeSearchQuery searchQuery = new NativeSearchQueryBuilder()
@@ -147,8 +147,8 @@ public class DocEsOrderServiceImpl implements DocEsOrderService {
         Map<String, Object> result = new HashMap<>();
         result.put("total", searchHits.getTotalHits());
         result.put("list", list);
-        log.info("【ES】搜索: keyword={}, status={}, mctId={}, page={}, size={}, 命中={}",
-                keyword, status, mctId, page, size, searchHits.getTotalHits());
+        log.info("【ES】搜索: request={}, page={}, size={}, 命中={}",
+                request, page, size, searchHits.getTotalHits());
         return result;
     }
 
@@ -219,28 +219,34 @@ public class DocEsOrderServiceImpl implements DocEsOrderService {
      *   filter → 只过滤，不算相关性得分（精确匹配/范围查询用，性能更好）
      *   must   → 算相关性得分（全文搜索用）
      *   qingo 绝大多数用 filter（因为是业务精确查询，不需要相关性得分）
+     *
+     * 【对象传条件】request 里的字段为 null 就跳过（不加这个条件），
+     *   和 MyBatis 的 <if test="字段 != null"> 一个道理。
      */
-    private BoolQueryBuilder buildQuery(String keyword, Integer status, Long mctId, String shopCode) {
+    private BoolQueryBuilder buildQuery(DocEsOrderSearchRequest request) {
         BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        if (request == null) {
+            return boolQueryBuilder;
+        }
 
         // 精确匹配：状态
-        if (status != null) {
-            boolQueryBuilder.filter(QueryBuilders.termQuery("status", status));
+        if (request.getStatus() != null) {
+            boolQueryBuilder.filter(QueryBuilders.termQuery("status", request.getStatus()));
         }
 
         // 精确匹配：商户ID
-        if (mctId != null) {
-            boolQueryBuilder.filter(QueryBuilders.termQuery("mct_id", mctId));
+        if (request.getMctId() != null) {
+            boolQueryBuilder.filter(QueryBuilders.termQuery("mct_id", request.getMctId()));
         }
 
         // 精确匹配：店铺编码
-        if (shopCode != null && !shopCode.trim().isEmpty()) {
-            boolQueryBuilder.filter(QueryBuilders.termQuery("shop_code", shopCode.trim()));
+        if (request.getShopCode() != null && !request.getShopCode().trim().isEmpty()) {
+            boolQueryBuilder.filter(QueryBuilders.termQuery("shop_code", request.getShopCode().trim()));
         }
 
         // 模糊搜索：商品名称（wildcard = SQL 的 LIKE）
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            boolQueryBuilder.filter(QueryBuilders.wildcardQuery("goods_names_text", "*" + keyword.trim() + "*"));
+        if (request.getKeyword() != null && !request.getKeyword().trim().isEmpty()) {
+            boolQueryBuilder.filter(QueryBuilders.wildcardQuery("goods_names_text", "*" + request.getKeyword().trim() + "*"));
         }
 
         return boolQueryBuilder;

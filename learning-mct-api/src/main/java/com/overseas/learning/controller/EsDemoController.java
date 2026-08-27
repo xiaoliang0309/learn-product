@@ -1,6 +1,7 @@
 package com.overseas.learning.controller;
 
 import com.overseas.learning.common.Result;
+import com.overseas.learning.dto.DocEsOrderSearchRequest;
 import com.overseas.learning.entity.DocEsOrder;
 import com.overseas.learning.service.DocEsOrderService;
 import lombok.RequiredArgsConstructor;
@@ -114,7 +115,14 @@ public class EsDemoController {
                                                @RequestParam(required = false) String shopCode,
                                                @RequestParam(defaultValue = "1") int page,
                                                @RequestParam(defaultValue = "10") int size) {
-        return Result.success(docEsOrderService.search(keyword, status, mctId, shopCode, page, size));
+        // 对齐 qingo：Controller 把参数装进 request 对象，Service 用对象传条件
+        DocEsOrderSearchRequest request = DocEsOrderSearchRequest.builder()
+                .keyword(keyword)
+                .status(status)
+                .mctId(mctId)
+                .shopCode(shopCode)
+                .build();
+        return Result.success(docEsOrderService.search(request, page, size));
     }
 
     /**

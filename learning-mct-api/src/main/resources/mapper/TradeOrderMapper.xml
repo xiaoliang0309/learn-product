@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.overseas.learning.dao.TradeOrderMapper">
+
+    <!-- 通用结果映射：数据库字段 → 实体属性 -->
+    <resultMap id="BaseResult" type="TradeOrder">
+        <id column="id" property="id"/>
+        <result column="order_no" property="orderNo"/>
+        <result column="merchant_id" property="merchantId"/>
+        <result column="shop_id" property="shopId"/>
+        <result column="amount" property="amount"/>
+        <result column="currency" property="currency"/>
+        <result column="receive_type" property="receiveType"/>
+        <result column="status" property="status"/>
+        <result column="payment_method" property="paymentMethod"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <!-- 插入（自增 ID 回填） -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO trade_order (order_no, merchant_id, shop_id, amount, currency, receive_type, status, payment_method, created_at)
+        VALUES (#{orderNo}, #{merchantId}, #{shopId}, #{amount}, #{currency}, #{receiveType}, #{status}, #{paymentMethod}, NOW())
+    </insert>
+
+    <!-- 按 ID 查询 -->
+    <select id="selectById" resultMap="BaseResult">
+        SELECT * FROM trade_order WHERE id = #{id}
+    </select>
+
+    <!-- 条件查询（动态 SQL） -->
+    <select id="selectList" resultMap="BaseResult">
+        SELECT * FROM trade_order
+        <where>
+            <if test="orderNo != null and orderNo != ''">
+                AND order_no = #{orderNo}
+            </if>
+            <if test="merchantId != null">
+                AND merchant_id = #{merchantId}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT 50
+    </select>
+
+    <!-- 统计总数 -->
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM trade_order
+        <where>
+            <if test="merchantId != null">
+                AND merchant_id = #{merchantId}
+            </if>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <!-- 更新状态 -->
+    <update id="updateStatus">
+        UPDATE trade_order SET status = #{status} WHERE id = #{id}
+    </update>
+
+    <!-- 删除 -->
+    <delete id="deleteById">
+        DELETE FROM trade_order WHERE id = #{id}
+    </delete>
+
+</mapper>
