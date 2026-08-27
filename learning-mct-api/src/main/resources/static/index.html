@@ -60,6 +60,7 @@
         <div class="tab" onclick="switchTab('auth', this)">登录拦截(拦截器)</div>
         <div class="tab" onclick="switchTab('feign', this)">微服务(Feign)</div>
         <div class="tab" onclick="switchTab('mongo', this)">操作日志(MongoDB)</div>
+        <div class="tab" onclick="switchTab('es', this)">订单搜索(ES)</div>
     </div>
 
     <!-- ===== 商户管理 Tab ===== -->
@@ -243,6 +244,85 @@
         <h2>API 响应</h2>
         <div id="response" class="response">点击按钮发送请求，结果将显示在这里</div>
     </div>
+
+    <!-- ===== 订单搜索(ES) Tab ===== -->
+    <div id="tab-es" class="tab-content">
+        <div class="card">
+            <h2>Elasticsearch 全文搜索 vs MySQL LIKE</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px;line-height:1.7">
+                Elasticsearch 是专用的搜索引擎，和 MySQL 的 LIKE 相比：<br>
+                · <b>MySQL LIKE</b>：只能从前往后匹配，且全表扫描慢<br>
+                · <b>ES 全文搜索</b>：倒排索引，支持分词、模糊、高亮，海量数据也快<br>
+                · qingo 用 ES 存储<b>订单数据</b>（doc_mct_order 索引），支持按商户/店铺/状态/商品名搜索<br>
+                <br>
+                <b>第一次使用</b>：先点「批量造数据」写入 20 条测试订单，再搜索。
+            </p>
+            <div class="form-row" style="margin-bottom:15px">
+                <button class="btn-success" onclick="esMockData(20)">批量造数据(20条)</button>
+                <button class="btn-warning" onclick="esDeleteAll()">清空索引</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>写入一条订单</h2>
+            <div class="form-row">
+                <input id="es-mctId" placeholder="商户ID *" value="1001" type="number">
+                <input id="es-mctName" placeholder="商户名称 *" value="Test Merchant A">
+                <input id="es-shopCode" placeholder="店铺编码 *" value="HG001">
+            </div>
+            <div class="form-row">
+                <input id="es-cabinetCode" placeholder="货柜编码" value="HG884120">
+                <input id="es-goodsName" placeholder="商品名称" value="Coca-Cola">
+                <select id="es-status">
+                    <option value="0">待支付</option>
+                    <option value="1" selected>已支付</option>
+                    <option value="2">已退款</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <input id="es-amount" placeholder="金额(分)" value="200" type="number">
+                <select id="es-payPlat">
+                    <option value="1">微信</option>
+                    <option value="2">支付宝</option>
+                </select>
+                <button class="btn-primary" onclick="esSaveOrder()">写入ES</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>搜索订单</h2>
+            <div class="form-row">
+                <input id="es-keyword" placeholder="商品名称(模糊搜索)">
+                <select id="es-searchStatus">
+                    <option value="">全部状态</option>
+                    <option value="0">待支付</option>
+                    <option value="1">已支付</option>
+                    <option value="2">已退款</option>
+                </select>
+                <input id="es-searchMctId" placeholder="商户ID" type="number">
+                <input id="es-searchShopCode" placeholder="店铺编码">
+            </div>
+            <div class="form-row">
+                <input id="es-page" placeholder="页码" value="1" type="number" style="max-width:100px">
+                <input id="es-size" placeholder="每页" value="10" type="number" style="max-width:100px">
+                <button class="btn-primary" onclick="esSearch()">搜索</button>
+            </div>
+            <div id="es-search-result" class="response">点「搜索」查看结果</div>
+        </div>
+
+        <div class="card">
+            <h2>状态统计（ES 聚合）</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:10px">
+                用 ES 的 terms 聚合，按状态分组统计订单数（qingo 用这种方式统计待支付/已支付数量）
+            </p>
+            <div class="form-row">
+                <input id="es-statsMctId" placeholder="商户ID(可选)" type="number">
+                <button class="btn-primary" onclick="esStats()">统计</button>
+            </div>
+            <div id="es-stats-result" class="response">点「统计」查看结果</div>
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -617,6 +697,125 @@ function renderOperateLogs(list) {
 
 // 页面加载时自动查询
 queryMerchants();
+esSearch();
+esStats();
+
+// ===== Elasticsearch 订单搜索 =====
+async function esMockData(count = 20) {
+    try {
+        const res = await fetch(`${BASE}/es/order/mock?count=${count}`, { method: 'POST' });
+        const json = await res.json();
+        if (json.code === 0) {
+            showToast(`✅ 已造 ${json.data} 条测试数据`, 'success');
+            esSearch();
+            esStats();
+        } else { showToast('❌ ' + json.msg, 'error'); }
+    } catch (e) { showToast('❌ 请求失败，请确认 ES 已启动', 'error'); }
+}
+
+async function esSaveOrder() {
+    const mctId = document.getElementById('es-mctId').value;
+    const mctName = document.getElementById('es-mctName').value;
+    const shopCode = document.getElementById('es-shopCode').value;
+    const cabinetCode = document.getElementById('es-cabinetCode').value;
+    const goodsName = document.getElementById('es-goodsName').value;
+    const status = document.getElementById('es-status').value;
+    const amount = document.getElementById('es-amount').value;
+    const payPlat = document.getElementById('es-payPlat').value;
+    if (!mctId || !mctName || !shopCode) { showToast('❌ 商户ID/名称/店铺编码必填', 'error'); return; }
+    const params = new URLSearchParams({ mctId, mctName, shopCode, cabinetCode, goodsNamesText: goodsName, status, amount, payPlat });
+    try {
+        const res = await fetch(`${BASE}/es/order?${params}`, { method: 'POST' });
+        const json = await res.json();
+        if (json.code === 0) { showToast('✅ 写入成功', 'success'); esSearch(); }
+        else { showToast('❌ ' + json.msg, 'error'); }
+    } catch (e) { showToast('❌ 请求失败', 'error'); }
+}
+
+async function esSearch() {
+    const keyword = document.getElementById('es-keyword').value;
+    const statusEl = document.getElementById('es-searchStatus');
+    const status = statusEl.value === '' ? '' : statusEl.value;
+    const mctId = document.getElementById('es-searchMctId').value;
+    const shopCode = document.getElementById('es-searchShopCode').value;
+    const page = document.getElementById('es-page').value || 1;
+    const size = document.getElementById('es-size').value || 10;
+    const params = new URLSearchParams({ page, size });
+    if (keyword) params.append('keyword', keyword);
+    if (status !== '') params.append('status', status);
+    if (mctId) params.append('mctId', mctId);
+    if (shopCode) params.append('shopCode', shopCode);
+    try {
+        const res = await fetch(`${BASE}/es/order/search?${params}`);
+        const json = await res.json();
+        const el = document.getElementById('es-search-result');
+        if (json.code === 0 && json.data) {
+            const list = json.data.list || [];
+            const total = json.data.total || 0;
+            const statusMap = { 0: '<span class="badge badge-warning">待支付</span>', 1: '<span class="badge badge-success">已支付</span>', 2: '<span class="badge badge-error">已退款</span>' };
+            const payMap = { 1: '微信', 2: '支付宝' };
+            let html = `<p style="color:#1677ff;margin-bottom:8px">共 ${total} 条，当前页 ${list.length} 条</p>`;
+            html += `<table><tr><th>商品</th><th>商户</th><th>店铺</th><th>状态</th><th>支付</th><th>金额</th><th>时间</th><th>操作</th></tr>`;
+            list.forEach(r => {
+                const time = r.createTime ? new Date(r.createTime).toLocaleString() : '-';
+                const payTime = r.payTime ? new Date(r.payTime).toLocaleString() : '-';
+                html += `<tr>
+                    <td>${r.goodsNamesText || '-'}</td>
+                    <td>${r.mctName || '-'}<br><span style="font-size:12px;color:#999">ID:${r.mctId}</span></td>
+                    <td>${r.shopCode || '-'}</td>
+                    <td>${statusMap[r.status] || r.status}</td>
+                    <td>${payMap[r.payPlat] || r.payPlat}</td>
+                    <td>${r.amount ? (r.amount / 100).toFixed(2) : '-'}</td>
+                    <td>${time}</td>
+                    <td><button class="btn-danger" onclick="esDelete('${r.id}')">删</button></td>
+                </tr>`;
+            });
+            html += '</table>';
+            el.innerHTML = html;
+        } else { el.textContent = JSON.stringify(json, null, 2); }
+    } catch (e) { document.getElementById('es-search-result').textContent = '请求失败：' + e.message; }
+}
+
+async function esStats() {
+    const mctId = document.getElementById('es-statsMctId').value;
+    const params = new URLSearchParams();
+    if (mctId) params.append('mctId', mctId);
+    try {
+        const res = await fetch(`${BASE}/es/order/stats?${params}`);
+        const json = await res.json();
+        const el = document.getElementById('es-stats-result');
+        if (json.code === 0 && json.data) {
+            const d = json.data;
+            const total = (d.pending_pay || 0) + (d.paid || 0) + (d.refunded || 0);
+            let html = `<div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:10px">
+                <div class="badge badge-warning" style="font-size:16px;padding:8px 16px">待支付: ${d.pending_pay || 0}</div>
+                <div class="badge badge-success" style="font-size:16px;padding:8px 16px">已支付: ${d.paid || 0}</div>
+                <div class="badge badge-error" style="font-size:16px;padding:8px 16px">已退款: ${d.refunded || 0}</div>
+                <div class="badge badge-default" style="font-size:16px;padding:8px 16px">合计: ${total}</div>
+            </div>`;
+            el.innerHTML = html;
+        } else { el.textContent = JSON.stringify(json, null, 2); }
+    } catch (e) { document.getElementById('es-stats-result').textContent = '请求失败：' + e.message; }
+}
+
+async function esDelete(id) {
+    try {
+        const res = await fetch(`${BASE}/es/order/${id}`, { method: 'DELETE' });
+        const json = await res.json();
+        if (json.code === 0) { showToast('✅ 删除成功', 'success'); esSearch(); esStats(); }
+        else { showToast('❌ ' + json.msg, 'error'); }
+    } catch (e) { showToast('❌ 请求失败', 'error'); }
+}
+
+async function esDeleteAll() {
+    if (!confirm('确认清空整个 ES 索引？')) return;
+    try {
+        const res = await fetch(`${BASE}/es/order/all`, { method: 'DELETE' });
+        const json = await res.json();
+        if (json.code === 0) { showToast('✅ 已清空', 'success'); esSearch(); esStats(); }
+        else { showToast('❌ ' + json.msg, 'error'); }
+    } catch (e) { showToast('❌ 请求失败', 'error'); }
+}
 </script>
 </body>
 </html>

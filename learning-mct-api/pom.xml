@@ -82,6 +82,11 @@
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
         </dependency>
+        <!-- Elasticsearch（对齐 qingo：ElasticsearchRestTemplate + @Document 实体） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+        </dependency>
         <!-- 测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

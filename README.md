@@ -34,7 +34,8 @@ overseas-learning/
 │   ├── entity/                                          # 实体类
 │   │   ├── Merchant.java
 │   │   ├── OnboardingRecord.java
-│   │   └── TradeOrder.java
+│   │   ├── TradeOrder.java
+│   │   └── DocEsOrder.java                              # ES 订单文档（@Document）
 │   └── dto/                                             # DTO（数据传输对象）
 │       ├── MerchantCreateDto.java
 │       ├── MerchantQueryDto.java
@@ -52,8 +53,23 @@ overseas-learning/
 │   │   ├── MerchantMapper.xml                           # MyBatis XML
 │   │   └── OnboardingRecordMapper.xml
 │   └── static/
-│       └── index.html                                   # 前端测试页面
+│       └── index.html                                   # 前端测试页面（含 ES 搜索演示）
 └── src/test/java/                                       # 测试（预留）
+
+---
+
+## 中间件对照（★ 对齐 qingo）
+
+| 中间件 | 用途 | qingo 真实写法 | 学习项目对应 |
+|--------|------|----------------|-------------|
+| MySQL | 业务主数据 | MyBatis Mapper + XML | MerchantMapper |
+| Redis | 缓存/锁 | RedisTemplate | RedisService |
+| MongoDB | 日志/文档数据 | MongoTemplate.save/find | DeviceLogService |
+| Kafka | 异步消息 | kafkaTemplate.send + @KafkaListener | OrderNoticeProducer/Listener |
+| **Elasticsearch** | **全文搜索/聚合统计** | **ElasticsearchRestTemplate + BoolQueryBuilder + NativeSearchQuery** | **DocEsOrderService** |
+| Nacos | 服务注册发现 | spring-cloud-alibaba-nacos-discovery | application.yml 配置 |
+| Feign | 服务间调用 | @FeignClient + fallback | MerchantFeignClient |
+| XXL-JOB | 分布式定时任务 | XxlJobSpringExecutor + @XxlJob | DemoXxlJob |
 ```
 
 ---
@@ -456,3 +472,74 @@ mysql -u root -p   # 登录（密码 root）
 | 两个 Controller | 注入对象从 `XxxService` 改为 `BizXxxService` |
 
 接口路径、请求参数、返回结构完全不变，前端页面无需改动。
+
+---
+
+## 八、Elasticsearch 演示
+
+### 8.1 安装 ES（Windows）
+
+```bash
+# 1. 下载 Elasticsearch 7.17.x（和 Spring Boot 2.7.x 的 spring-data-elasticsearch 4.4 对齐）
+#    下载地址：https://www.elastic.co/downloads/past-releases#elasticsearch
+#    解压到 C:\elasticsearch-7.17.x
+
+# 2. 启动
+cd C:\elasticsearch-7.17.x\bin
+elasticsearch.bat
+
+# 3. 验证（浏览器或 curl）
+curl http://localhost:9200
+# 返回 JSON 含 "You Know, for Search" 即成功
+```
+
+### 8.2 学习项目的 ES 接口
+
+| 操作 | 接口 | 说明 |
+|------|------|------|
+| 造测试数据 | `POST /es/order/mock?count=20` | 批量写 20 条随机订单 |
+| 写入订单 | `POST /es/order` | 手动写一条 |
+| 搜索 | `GET /es/order/search?keyword=可乐&status=1&page=1&size=10` | 模糊+条件+分页 |
+| 统计 | `GET /es/order/stats?mctId=1001` | 按状态聚合统计 |
+| 删除 | `DELETE /es/order/{id}` | 按 ID 删 |
+| 清空 | `DELETE /es/order/all` | 清空索引（学习用） |
+
+### 8.3 qingo 对照
+
+```
+学习项目                          qingo 真实项目
+─────────────────────────────────────────────────────────
+DocEsOrder                        DocEsMctOrder              ← @Document 实体
+  @Document(indexName="doc_order")   @Document(indexName="doc_mct_order")
+  @Field(name="status",Keyword)     @Field(name="status",Integer)
+
+DocEsOrderService                  DocEsMctOrderService       ← Service 接口
+  ↓                                  ↓
+DocEsOrderServiceImpl              DocEsMctOrderServiceImpl   ← 实现
+  ElasticsearchRestTemplate          ElasticsearchRestTemplate  ← ★ 同一个工具类
+  BoolQueryBuilder                   BoolQueryBuilder          ← 条件构建
+  NativeSearchQuery                  NativeSearchQuery         ← 查询组装
+  elasticsearchRestTemplate.search() elasticsearchRestTemplate.search()  ← 执行
+  AggregationBuilders.terms()        AggregationBuilders.terms() ← 聚合统计
+```
+
+### 8.4 关键概念
+
+| 概念 | MySQL 类比 | ES 写法 |
+|------|-----------|---------|
+| 索引 (Index) | 表 | `@Document(indexName = "doc_order")` |
+| 文档 (Document) | 行 | `elasticsearchRestTemplate.save(doc)` |
+| 字段类型 Keyword | VARCHAR（精确匹配） | `@Field(type = FieldType.Keyword)` |
+| 字段类型 Text | TEXT（全文搜索） | `@Field(type = FieldType.Text)` |
+| termQuery | `WHERE status = 1` | `QueryBuilders.termQuery("status", 1)` |
+| wildcardQuery | `WHERE name LIKE '%可乐%'` | `QueryBuilders.wildcardQuery("name", "*可乐*")` |
+| rangeQuery | `WHERE create_time >= ?` | `QueryBuilders.rangeQuery("create_time").gte(...)` |
+| terms 聚合 | `GROUP BY status` | `AggregationBuilders.terms("status").field("status")` |
+
+### 8.5 前端页面
+
+浏览器访问 `http://localhost:9090`，切到「订单搜索(ES)」Tab：
+1. 点「批量造数据」写入 20 条测试订单
+2. 输入商品名称搜索（试试 `Coca` / `Pepsi`）
+3. 按状态/商户过滤
+4. 点「统计」看聚合结果
