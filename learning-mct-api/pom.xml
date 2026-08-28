@@ -56,6 +56,16 @@
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
+        <!-- Nacos 配置中心（对齐 qingo：配置放 Nacos，bootstrap.yml 拉取） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+        <!-- Spring Cloud 2021.x 默认不读 bootstrap.yml，需显式引入才能用 bootstrap -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bootstrap</artifactId>
+        </dependency>
         <!-- Feign 远程调用 -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>

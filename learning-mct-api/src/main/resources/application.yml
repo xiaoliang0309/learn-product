@@ -1,19 +1,20 @@
 # ============================================
-# 学习项目主配置
-# 使用 MySQL 数据库（已安装 8.0.28）
+# 学习项目主配置（本地配置）
+#
+# 【配置中心后的分工】（★ 对齐 qingo）
+#   bootstrap.yml   → 只配「怎么连 Nacos 配置中心」（先加载）
+#   Nacos 配置中心   → 放「会变、多环境不同」的配置（如超时时间、开关、限流值）
+#   application.yml → 放「基本不变」的配置（端口、数据源、中间件地址）
+#
+#   读取优先级：Nacos 远程配置 > 本地 application.yml
+#   也就是说：同一个 key，Nacos 里配了，就用 Nacos 的，覆盖本地。
 # ============================================
 server:
   port: 9090
 
 spring:
   application:
-    name: overseas-learning   # ★ 服务名：服务A 注册到 Nacos 的名字
-
-  # ===== Nacos 注册中心 =====
-  cloud:
-    nacos:
-      discovery:
-        server-addr: localhost:8848
+    name: overseas-learning   # ★ 服务名：服务A 注册到 Nacos 的名字（bootstrap.yml 也用了）
 
   # ===== MongoDB 配置（本机 C:\mongodb，27017）=====
   data:

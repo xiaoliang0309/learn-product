@@ -1,0 +1,35 @@
+# ============================================
+# bootstrap.yml —— 启动引导配置（★ 对齐 qingo）
+#
+# 【它和 application.yml 的区别】
+#   bootstrap.yml 比 application.yml 先加载，专门用来配「配置中心」。
+#   项目启动时：先读 bootstrap.yml → 连上 Nacos 配置中心 → 把远程配置拉下来
+#             → 再读本地 application.yml → 合并生效。
+#
+# 【对齐 qingo】
+#   qingo 的 bootstrap-dev.yml 就是这么写的：
+#     spring.cloud.nacos.config.server-addr: 192.168.5.12:8848
+#     spring.cloud.nacos.config.namespace: xxx
+#   本地学习不用 namespace（用 public 默认空间），也不用账号密码。
+# ============================================
+spring:
+  application:
+    name: overseas-learning   # ★ 服务名：Nacos 找配置时用它当 data-id 前缀
+
+  cloud:
+    nacos:
+      # ===== 服务注册发现（原本在 application.yml，挪到这里统一管理）=====
+      discovery:
+        server-addr: localhost:8848
+      # ===== 配置中心（★ 本次新增）=====
+      config:
+        server-addr: localhost:8848      # Nacos 地址
+        # 配置文件格式：data-id = ${spring.application.name}.${file-extension}
+        # 即 overseas-learning.yaml，在 Nacos 控制台「配置管理」里建
+        file-extension: yaml
+        # group 默认 DEFAULT_GROUP，不用配
+        # 额外拉一个共享配置（对齐 qingo 的 extension-configs，可选）
+        extension-configs:
+          - data-id: learning-common.yaml   # 共享配置，多服务可复用
+            group: DEFAULT_GROUP
+            refresh: true                   # 这个配置改了会自动刷新

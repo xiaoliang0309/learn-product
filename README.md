@@ -543,3 +543,93 @@ DocEsOrderServiceImpl              DocEsMctOrderServiceImpl   ← 实现
 2. 输入商品名称搜索（试试 `Coca` / `Pepsi`）
 3. 按状态/商户过滤
 4. 点「统计」看聚合结果
+
+---
+
+## 九、配置中心（Nacos Config）
+
+### 9.1 一句话理解
+
+**配置中心 = 把配置从代码里搬到一个统一的网页上管理，改完不用重启项目就生效。**
+
+```
+没用配置中心：
+  改一个超时时间 → 改 application.yml → 重新打包 → 重启项目 → 才生效
+
+用了配置中心：
+  改一个超时时间 → 在 Nacos 网页上改 → 点发布 → 项目立刻用新值（不重启）
+```
+
+### 9.2 配置分三处放（对齐 qingo）
+
+| 位置 | 放什么 | 文件/地点 |
+|------|--------|----------|
+| **bootstrap.yml** | 只配「怎么连 Nacos 配置中心」 | 本地，最先加载 |
+| **Nacos 配置中心** | 「会变、多环境不同」的配置（开关、阈值、文案） | Nacos 网页 |
+| **application.yml** | 「基本不变」的配置（端口、数据源、中间件地址） | 本地 |
+
+**读取优先级**：Nacos 远程配置 > 本地 application.yml > @Value 默认值
+
+### 9.3 代码结构
+
+```
+bootstrap.yml                          ← 配 spring.cloud.nacos.config（连配置中心）
+config/LearningBizConfig.java          ← @RefreshScope + @Value 读配置（支持动态刷新）
+controller/ConfigDemoController.java   ← /config/show 查看当前配置
+```
+
+### 9.4 关键代码（就两个注解）
+
+```java
+@Data
+@Component
+@RefreshScope   // ★ 关键1：Nacos 配置改了，这个 Bean 自动刷新，不用重启
+public class LearningBizConfig {
+
+    @Value("${learning.order.max-amount:100000}")   // ★ 关键2：读配置，冒号后是默认值
+    private Long orderMaxAmount;
+}
+```
+
+- `@RefreshScope`：标在类上，Nacos 配置改了它会自动更新
+- `@Value("${key:默认值}")`：读一个配置项，Nacos 没配就用默认值兜底
+
+### 9.5 动手验证（已帮你建好配置）
+
+配置已用 Nacos OpenAPI 建好了，data-id 是 `overseas-learning.yaml`，内容：
+```yaml
+learning:
+  features:
+    cooling-reminder: false      # 功能开关
+  order:
+    max-amount: 88888            # 下单金额上限
+  tips:
+    welcome: 这是来自 Nacos 配置中心的文案！
+```
+
+**验证步骤**：
+1. 重启项目（让它连上 Nacos 拉配置）
+2. 调 `GET http://localhost:9090/config/show`，看到：
+   ```
+   coolingReminder: false        ← 来自 Nacos（本地默认是 true，被覆盖了）
+   orderMaxAmount: 88888         ← 来自 Nacos（本地默认是 100000，被覆盖了）
+   welcomeTip: 这是来自 Nacos...
+   ```
+3. 到 Nacos 控制台（http://localhost:8848/nacos，nacos/nacos）
+   → 配置管理 → 配置列表 → 找到 `overseas-learning.yaml` → 编辑 → 把 `max-amount` 改成 `66666` → 发布
+4. **不重启项目**，再调 `/config/show` → `orderMaxAmount` 变成 `66666` 了 ★ 这就是动态刷新
+
+### 9.6 qingo 对照
+
+```
+学习项目                          qingo
+──────────────────────────────────────────────────
+bootstrap.yml                     bootstrap-dev.yml / bootstrap-prod.yml
+  spring.cloud.nacos.config         spring.cloud.nacos.config（+ namespace 隔离环境）
+  file-extension: yaml              extension-configs（拉共享配置如 spring-elasticsearch.yaml）
+overseas-learning.yaml            <服务名>.yaml（每个服务一个 data-id）
+LearningBizConfig                 各服务的 @RefreshScope 配置类
+learning.order.max-amount         qingo.bill-month.exclude-current-month
+```
+
+**核心差异**：qingo 多环境用 `namespace` 隔离（dev/test/prod 各一个 namespace），学习项目单环境用默认 public 空间即可，思想完全一致。

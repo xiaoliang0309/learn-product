@@ -62,6 +62,7 @@
         <div class="tab" onclick="switchTab('mongo', this)">操作日志(MongoDB)</div>
         <div class="tab" onclick="switchTab('es', this)">订单搜索(ES)</div>
         <div class="tab" onclick="switchTab('dual', this)">订单双写(MySQL+ES)</div>
+        <div class="tab" onclick="switchTab('config', this)">配置中心(Nacos)</div>
     </div>
 
     <!-- ===== 商户管理 Tab ===== -->
@@ -386,6 +387,70 @@
                 <button class="btn-primary" onclick="dualEsSearch()">ES 搜索</button>
             </div>
             <div id="d-essearch-result" class="response">点「ES 搜索」查看（走 ES，毫秒级）</div>
+        </div>
+    </div>
+
+    <!-- ===== 配置中心(Nacos) Tab ===== -->
+    <div id="tab-config" class="tab-content">
+        <div class="card">
+            <h2>配置中心：配置放网页上管，改完不用重启就生效</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px;line-height:1.7">
+                <b>核心思想</b>（对齐 qingo）：把「会变的配置」从代码搬到 <b>Nacos 配置中心</b>统一管理。<br>
+                · <b>没用配置中心</b>：改配置 → 改 application.yml → 重新打包 → 重启项目才生效<br>
+                · <b>用了配置中心</b>：改配置 → Nacos 网页改 → 点发布 → <b>不重启立刻生效</b><br>
+                · <b>关键注解</b>：<code>@RefreshScope</code>（类上，自动刷新） + <code>@Value("${key:默认值}")</code>（读配置）
+            </p>
+            <p style="color:#666;font-size:13px;line-height:1.7;background:#f8f9ff;padding:12px;border-radius:6px">
+                <b>📖 动手试：</b><br>
+                1️⃣ 先点下面「查看当前配置」，记下 <b>orderMaxAmount</b> 的值<br>
+                2️⃣ 打开 <a href="http://localhost:8848/nacos" target="_blank" style="color:#1677ff">Nacos 控制台</a>（nacos/nacos）→ 配置管理 → 配置列表 → 编辑 <b>overseas-learning.yaml</b><br>
+                3️⃣ 把 <code>max-amount</code> 改成别的数（比如 12345）→ 点「发布」<br>
+                4️⃣ <b>不重启项目</b>，再点「查看当前配置」→ 值变了！这就是<b>动态刷新</b>
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>当前生效的配置（来自后端 /config/show）</h2>
+            <div class="form-row">
+                <button class="btn-primary" onclick="configShow()">查看当前配置</button>
+            </div>
+            <div id="c-show-result" class="response">点「查看当前配置」</div>
+        </div>
+
+        <div class="card">
+            <h2>配置是怎么读进来的</h2>
+            <p style="color:#666;font-size:13px;line-height:1.8">
+                <b>三步：</b><br>
+                ① Nacos 上写 YAML 配置（树状缩进）<br>
+                ② Java 定义字段 + <code>@Value("${点号路径:默认值}")</code> 读出来<br>
+                ③ <code>@RefreshScope</code> 让改动不用重启就生效<br><br>
+                <b>对应关系</b>（YAML 每层缩进 = @Value 里一个点号）：<br>
+                <code>learning.order.max-amount</code> ←→ <code>@Value("${learning.order.max-amount:100000}")</code>
+            </p>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">
+                <div style="flex:1;min-width:280px">
+                    <div class="label">Nacos 上的配置（overseas-learning.yaml）</div>
+                    <pre style="background:#1e1e1e;color:#d4d4d4;padding:14px;border-radius:6px;font-size:12px;overflow:auto">learning:
+  features:
+    cooling-reminder: false
+  order:
+    max-amount: 66666
+  tips:
+    welcome: 这是来自 Nacos 的文案</pre>
+                </div>
+                <div style="flex:1;min-width:280px">
+                    <div class="label">Java 读取（LearningBizConfig.java）</div>
+                    <pre style="background:#1e1e1e;color:#d4d4d4;padding:14px;border-radius:6px;font-size:12px;overflow:auto">@RefreshScope
+public class LearningBizConfig {
+  @Value("${learning.features.cooling-reminder:true}")
+  private Boolean coolingReminder;
+  @Value("${learning.order.max-amount:100000}")
+  private Long orderMaxAmount;
+  @Value("${learning.tips.welcome:默认文案}")
+  private String welcomeTip;
+}</pre>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -765,6 +830,7 @@ function renderOperateLogs(list) {
 queryMerchants();
 esSearch();
 esStats();
+configShow();
 
 // ===== Elasticsearch 订单搜索 =====
 async function esMockData(count = 20) {
@@ -990,6 +1056,27 @@ async function dualEsSearch() {
             el.innerHTML = html;
         } else { el.textContent = JSON.stringify(json, null, 2); }
     } catch (e) { document.getElementById('d-essearch-result').textContent = '请求失败: ' + e.message; }
+}
+
+// ===== 配置中心（Nacos Config） =====
+async function configShow() {
+    try {
+        const res = await fetch(`${BASE}/config/show`);
+        const json = await res.json();
+        const el = document.getElementById('c-show-result');
+        if (json.code === 0 && json.data) {
+            const d = json.data;
+            const time = new Date().toLocaleTimeString();
+            let html = `<p style="color:#999;font-size:12px;margin-bottom:10px">查询时间: ${time}（改 Nacos 后再点，看值是否变化 → 验证动态刷新）</p>`;
+            html += '<table><tr><th>配置项</th><th>当前生效值</th><th>说明</th></tr>';
+            for (const key in d) {
+                if (key === '说明') continue;
+                html += `<tr><td>${key}</td><td><b style="color:#6619FF">${d[key]}</b></td><td style="color:#999;font-size:12px">来自 Nacos（无则取默认值）</td></tr>`;
+            }
+            html += '</table>';
+            el.innerHTML = html;
+        } else { el.textContent = JSON.stringify(json, null, 2); }
+    } catch (e) { document.getElementById('c-show-result').textContent = '请求失败（项目是否已启动并连上 Nacos？）: ' + e.message; }
 }
 </script>
 </body>
