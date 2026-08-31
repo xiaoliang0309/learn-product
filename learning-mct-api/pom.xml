@@ -97,6 +97,38 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
         </dependency>
+        <!-- Redisson 分布式锁（对齐 qingo：防并发，扣库存/下单防重复）
+             qingo 用 qinggouyun-component-distributedlock-redisson（lock4j 注解封装，底层就是 Redisson）
+             学习项目直接用 Redisson 原生，更易懂 -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-boot-starter</artifactId>
+            <version>3.20.1</version>
+            <!-- 排除 starter 默认绑定的 redisson-spring-data-30：
+                 它是按 spring-data-redis 3.x 编译的，会引用 Spring Boot 2.7 里没有的
+                 org.springframework.data.redis.connection.Limit，调 putIfAbsent 报 NoClassDefFoundError。
+                 下面显式换成匹配 spring-data-redis 2.7 的 redisson-spring-data-27 -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.redisson</groupId>
+                    <artifactId>redisson-spring-data-30</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- 显式指定与 Spring Boot 2.7（spring-data-redis 2.7.x）匹配的 Redisson 适配模块 -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-data-27</artifactId>
+            <version>3.20.1</version>
+        </dependency>
+        <!-- Lock4j 注解式分布式锁（★ 完全对齐 qingo 公司规范：@Lock4j）
+             qingo 注释里写明「公司规定分布式锁使用 com.baomidou.lock.annotation.Lock4j」，
+             底层用 Redisson 实现，所以引入 redisson 版的 starter -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>lock4j-redisson-spring-boot-starter</artifactId>
+            <version>2.2.7</version>
+        </dependency>
         <!-- 测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

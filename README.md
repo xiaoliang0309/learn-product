@@ -633,3 +633,74 @@ learning.order.max-amount         qingo.bill-month.exclude-current-month
 ```
 
 **核心差异**：qingo 多环境用 `namespace` 隔离（dev/test/prod 各一个 namespace），学习项目单环境用默认 public 空间即可，思想完全一致。
+
+---
+
+## 十、分布式锁（Redisson）
+
+### 10.1 一句话理解
+
+**分布式锁 = 把锁放在 Redis 里，让多个服务实例抢同一把锁，防止并发操作出错（比如超卖）。**
+
+```
+库存 10 件，50 人同时抢：
+  不加锁：大家都读到「还剩 10」，都扣 → 库存变 -40（❌ 超卖）
+  加锁：  同一时刻只有 1 人能「读+扣」 → 库存正好扣到 0（✅ 正常）
+```
+
+### 10.2 为什么不用 synchronized
+
+```
+synchronized 只能锁「单个 JVM 进程内」的线程。
+微服务是多实例部署（多个服务进程），A 实例的锁锁不住 B 实例的线程。
+所以把锁放 Redis（所有实例共享），谁都能抢 → 这就是「分布式锁」。
+```
+
+### 10.3 核心三步（Redisson 原生）
+
+```java
+// 1. 拿锁
+RLock lock = redissonClient.getLock("lock:stock:goods:1");
+// 2. 抢锁（最多等 3 秒，抢到后 10 秒自动释放）
+if (lock.tryLock(3, 10, TimeUnit.SECONDS)) {
+    try {
+        // 读库存 + 扣库存（这段同一时刻只有一个线程执行）
+    } finally {
+        lock.unlock();   // 3. 释放锁（必须放 finally，防死锁）
+    }
+}
+```
+
+### 10.4 qingo 对照
+
+```
+学习项目（Redisson 原生）              qingo（lock4j 注解封装，底层 Redisson）
+─────────────────────────────────────────────────────────────────────
+RLock lock = redissonClient           @Lock4j(keys = {"#shopId"},
+  .getLock("lock:stock:1")                    expire = 10000,
+lock.tryLock(3, 10, SECONDS)                  acquireTimeout = 0)
+  try { 业务 }                          public void addShopTmplSlot(shopId, dto) {
+  finally { lock.unlock() }               // 方法体（同 shopId 同时只一个请求）
+                                      }
+
+依赖: redisson-spring-boot-starter    依赖: qinggouyun-component-distributedlock-redisson
+
+【关系】lock4j 是对 Redisson 的注解封装，@Lock4j 帮你自动做「拿锁+抢锁+释放锁」，
+        底层就是 Redisson 的 RLock.tryLock。学会原生 tryLock，看注解就懂了。
+```
+
+### 10.5 页面验证
+
+重启项目，切到「分布式锁(Redisson)」Tab：
+1. 点「① 不加锁压测」：50 线程抢 10 件库存 → 最终库存变 **负数（超卖）**
+2. 点「② 加锁压测」：同样条件 → 最终库存正好 **0（不超卖）**
+3. 对比两个结果，直观理解分布式锁的作用
+
+### 10.6 关键注意事项
+
+| 注意点 | 说明 |
+|--------|------|
+| 释放锁放 finally | 防止业务异常导致锁不释放 → 死锁 |
+| 设置锁过期时间 | `tryLock(3, 10, SECONDS)` 的 10 秒：即使忘 unlock，10 秒后自动释放 |
+| 只释放自己的锁 | `lock.isHeldByCurrentThread()` 判断，防误删别人的锁 |
+| 抢锁失败怎么办 | 返回错误/稍后重试，不要无限等待 |

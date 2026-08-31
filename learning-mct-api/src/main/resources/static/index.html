@@ -63,6 +63,7 @@
         <div class="tab" onclick="switchTab('es', this)">订单搜索(ES)</div>
         <div class="tab" onclick="switchTab('dual', this)">订单双写(MySQL+ES)</div>
         <div class="tab" onclick="switchTab('config', this)">配置中心(Nacos)</div>
+        <div class="tab" onclick="switchTab('lock', this)">分布式锁(Redisson)</div>
     </div>
 
     <!-- ===== 商户管理 Tab ===== -->
@@ -451,6 +452,85 @@ public class LearningBizConfig {
 }</pre>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- ===== 分布式锁(Redisson) Tab ===== -->
+    <div id="tab-lock" class="tab-content">
+        <div class="card">
+            <h2>分布式锁：防止并发「超卖」（对齐 qingo）</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px;line-height:1.7">
+                <b>要解决什么问题？</b>库存 10 件，50 个人同时抢。<br>
+                · <b>不加锁</b>：大家都读到「还剩 10」，都扣 → 库存变 <b style="color:#ff4d4f">负数（超卖）</b><br>
+                · <b>加分布式锁</b>：同一时刻只有一个人能「读+扣」→ 库存正好扣到 <b style="color:#52c41a">0（不超卖）</b><br>
+                <br>
+                <b>为什么不用 synchronized？</b>它只能锁单个 JVM 进程。微服务多实例部署，得把锁放 <b>Redis</b>（大家共享）。<br>
+                <b>三种加锁方式对比：</b>① Redisson 原生 tryLock（学习项目）② SETNX（qingo 的 RedisLockUtils 真实实现）③ @Lock4j 注解（qingo 公司规范）。
+            </p>
+        </div>
+
+        <div class="card">
+            <h2>并发压测（四种模式逐个对比）</h2>
+            <div class="form-row">
+                <input id="l-stock" type="number" placeholder="初始库存" value="10">
+                <input id="l-concurrency" type="number" placeholder="并发人数" value="50">
+            </div>
+            <div class="form-row">
+                <button class="btn-danger" onclick="lockTest('NONE')">① 不加锁</button>
+                <button class="btn-primary" onclick="lockTest('REDISSON')">② Redisson</button>
+                <button class="btn-success" onclick="lockTest('SETNX')">③ SETNX(qingo同款)</button>
+                <button class="btn-warning" onclick="lockTest('LOCK4J')">④ @Lock4j(qingo规范)</button>
+                <button class="btn-warning" onclick="lockReset()">重置库存</button>
+            </div>
+            <div id="l-result" class="response">建议顺序：先点「① 不加锁」看超卖（库存变负），再依次点 ②③④ 看三种锁都不超卖（库存=0），对比它们写法差异</div>
+        </div>
+
+        <div class="card">
+            <h2>三种加锁方式核心代码对比</h2>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+                <div style="flex:1;min-width:300px">
+                    <div class="label">② Redisson 原生 tryLock（功能最全）</div>
+                    <pre style="background:#1e1e1e;color:#d4d4d4;padding:14px;border-radius:6px;font-size:12px;overflow:auto">RLock lock = redissonClient.getLock(key);
+// 抢锁：等3秒，抢到后10秒自动释放
+if (lock.tryLock(3, 10, SECONDS)) {
+  try {
+    // 读库存 + 扣库存
+  } finally {
+    if (lock.isHeldByCurrentThread())
+      lock.unlock();   // 只释放自己的锁
+  }
+}
+// 特点：可重入、看门狗自动续期、能等待</pre>
+                </div>
+                <div style="flex:1;min-width:300px">
+                    <div class="label">③ SETNX（qingo RedisLockUtils 真实写法）</div>
+                    <pre style="background:#1e1e1e;color:#d4d4d4;padding:14px;border-radius:6px;font-size:12px;overflow:auto">// putIfAbsent = 「SET key val NX EX」
+Boolean ok = redisService
+    .putIfAbsent(key, val, 10); // 抢到=true
+if (!ok) throw new BizException("请勿重复提交");
+try {
+  // 读库存 + 扣库存
+} finally {
+  redisService.remove(key);     // 删key=释放
+}
+// 特点：最简单，抢不到立刻报错，防重复提交</pre>
+                </div>
+                <div style="flex:1;min-width:300px">
+                    <div class="label">④ @Lock4j 注解（qingo 公司规范，最省心）</div>
+                    <pre style="background:#1e1e1e;color:#d4d4d4;padding:14px;border-radius:6px;font-size:12px;overflow:auto">@Lock4j(keys = {"'lock:goods:1'"},
+    executor = RedissonLockExecutor.class,
+    expire = 10000,       // 10秒自动释放
+    acquireTimeout = 3000) // 最多抢3秒
+public int deduct() {
+  // 方法体：AOP 已帮你加好锁
+  // 返回/抛异常后自动释放锁
+}
+// 特点：声明式零侵入；★须走代理调用才生效</pre>
+                </div>
+            </div>
+            <p style="color:#999;font-size:12px;margin-top:12px;line-height:1.6">
+                <b>一句话总结：</b>② 适合「必须执行、愿意排队等锁」（如扣库存）；③ 适合「同一操作防重复提交，抢不到就报错」；④ 是 qingo 生产标准，用注解把加锁逻辑从业务代码里彻底拿掉。三者底层都靠 Redis 原子操作保证「同一时刻只有一个持有者」。
+            </p>
         </div>
     </div>
 
@@ -1077,6 +1157,52 @@ async function configShow() {
             el.innerHTML = html;
         } else { el.textContent = JSON.stringify(json, null, 2); }
     } catch (e) { document.getElementById('c-show-result').textContent = '请求失败（项目是否已启动并连上 Nacos？）: ' + e.message; }
+}
+
+// ===== 分布式锁（Redisson） =====
+const LOCK_MODE_NAME = {
+    NONE:     { label: '① 不加锁',               desc: '多线程同时读到相同库存，都扣了一遍 → 库存被扣成负数。再点 ②③④ 对比看正常结果。' },
+    REDISSON: { label: '② Redisson tryLock',      desc: 'RLock.tryLock 抢锁，同一时刻只有一个线程能「读+扣」，库存精确扣到 0。可重入、能等待。' },
+    SETNX:    { label: '③ SETNX (qingo同款)',     desc: 'putIfAbsent(SET NX EX) 抢锁 + 自旋重试，qingo RedisLockUtils 的真实写法。不超卖。' },
+    LOCK4J:   { label: '④ @Lock4j (qingo规范)',   desc: '注解式加锁，AOP 自动加解锁，业务代码零侵入。须走 Spring 代理调用才生效。不超卖。' }
+};
+
+async function lockTest(mode) {
+    const stock = document.getElementById('l-stock').value || 10;
+    const concurrency = document.getElementById('l-concurrency').value || 50;
+    const el = document.getElementById('l-result');
+    const modeInfo = LOCK_MODE_NAME[mode] || { label: mode, desc: '' };
+    el.textContent = `压测中...（${concurrency} 个线程同时抢 ${stock} 件库存，模式=${modeInfo.label}）`;
+    try {
+        const res = await fetch(`${BASE}/lock/test?mode=${mode}&stock=${stock}&concurrency=${concurrency}`, { method: 'POST' });
+        const json = await res.json();
+        if (json.code === 0 && json.data) {
+            const d = json.data;
+            const statusBadge = d.oversold
+                ? '<span class="badge badge-error" style="font-size:16px;padding:8px 16px">❌ 超卖了！库存被扣成负数</span>'
+                : '<span class="badge badge-success" style="font-size:16px;padding:8px 16px">✅ 正常，没超卖</span>';
+            el.innerHTML = `<p style="margin-bottom:10px">${statusBadge}</p>
+<table>
+  <tr><th>加锁方式</th><td><b>${modeInfo.label}</b></td></tr>
+  <tr><th>初始库存</th><td>${d.initStock} 件</td></tr>
+  <tr><th>并发线程</th><td>${d.concurrency} 个</td></tr>
+  <tr><th>最终库存</th><td><b style="color:${d.finalStock < 0 ? '#ff4d4f' : '#52c41a'};font-size:18px">${d.finalStock}</b> ${d.finalStock < 0 ? '（负数=超卖）' : ''}</td></tr>
+  <tr><th>成功扣减</th><td>${d.successCount} 次</td></tr>
+  <tr><th>耗时</th><td>${d.costMs} ms</td></tr>
+</table>
+<p style="color:#999;font-size:12px;margin-top:10px">${modeInfo.desc}</p>`;
+        } else { el.textContent = JSON.stringify(json, null, 2); }
+    } catch (e) { el.textContent = '请求失败: ' + e.message; }
+}
+
+async function lockReset() {
+    const stock = document.getElementById('l-stock').value || 10;
+    try {
+        const res = await fetch(`${BASE}/lock/init?stock=${stock}`, { method: 'POST' });
+        const json = await res.json();
+        if (json.code === 0) { showToast(`✅ 库存已重置为 ${json.data}`, 'success'); document.getElementById('l-result').textContent = '库存已重置，可重新压测'; }
+        else { showToast('❌ ' + json.msg, 'error'); }
+    } catch (e) { showToast('❌ 请求失败', 'error'); }
 }
 </script>
 </body>

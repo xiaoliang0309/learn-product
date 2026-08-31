@@ -4,12 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.overseas.learning.service.RedisService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -82,28 +79,21 @@ public class RedisServiceImpl implements RedisService {
     }
 
     /**
-     * 防重复提交 —— 实现照搬 qingo
+     * 防重复提交 —— 实现照搬 qingo（qingo RedisServiceImpl 第 92 行就是这么写的）
      *
-     * 为什么用 connection.execute 而不是现成 API？
-     *   「SET key value EX 秒 NX」是一条原子命令（要么全做要么全不做），
-     *   RedisTemplate 的高级 API 不好一次表达「NX + EX」组合，
-     *   所以 qingo 直接用底层 connection 发原生命令，保证原子性。
-     *   原子性很重要：判断「是否存在」和「写入」必须是一步，否则并发下会失效。
+     * 用 Spring Data 的高层 API：opsForValue().setIfAbsent(key, value, 秒, SECONDS)
+     *   它底层就是原子的「SET key value NX EX 秒」，一句话表达「不存在才写入 + 带过期」。
+     *
+     * 【为什么不用 connection.execute 发原生命令？】
+     *   之前用 redisTemplate.execute(connection -> connection.execute("set",...))，
+     *   这种「透传原生命令」的写法只有 Lettuce/Jedis 连接支持；
+     *   本项目为分布式锁引入了 Redisson，Redisson 的 RedissonConnection 不支持
+     *   任意命令透传，会抛 UnsupportedOperationException（你刚遇到的那个报错）。
+     *   而 setIfAbsent 是标准高层 API，Lettuce / Jedis / Redisson 三种连接都兼容。
      */
     @Override
     public Boolean putIfAbsent(String key, String value, long expire) {
-        Boolean result = redisTemplate.execute((RedisCallback<Boolean>) connection -> {
-            RedisSerializer keySerializer = redisTemplate.getKeySerializer();
-            RedisSerializer valueSerializer = redisTemplate.getValueSerializer();
-            Object obj = connection.execute("set",
-                    keySerializer.serialize(key),
-                    valueSerializer.serialize(value),
-                    "NX".getBytes(StandardCharsets.UTF_8),   // NX = 不存在才写入
-                    "EX".getBytes(StandardCharsets.UTF_8),   // EX = 设置过期秒数
-                    String.valueOf(expire).getBytes(StandardCharsets.UTF_8));
-            // 写入成功返回 "OK"，已存在返回 null → 转成 boolean
-            return obj != null;
-        });
+        Boolean result = redisTemplate.opsForValue().setIfAbsent(key, value, expire, TimeUnit.SECONDS);
         return Boolean.TRUE.equals(result);
     }
 
