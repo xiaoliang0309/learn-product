@@ -31,11 +31,11 @@ public class OnboardingServiceImpl implements OnboardingService {
 
     @Override
     public OnboardingRecord getById(Long id) {
-        return onboardingRecordMapper.selectById(id);
+        return onboardingRecordMapper.getById(id);
     }
 
     @Override
     public List<OnboardingRecord> listByMerchant(Long merchantId) {
-        return onboardingRecordMapper.selectByMerchantId(merchantId);
+        return onboardingRecordMapper.getByMerchantId(merchantId);
     }
 }

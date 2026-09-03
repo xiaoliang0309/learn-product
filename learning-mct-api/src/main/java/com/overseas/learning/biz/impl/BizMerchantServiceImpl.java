@@ -113,7 +113,7 @@ public class BizMerchantServiceImpl implements BizMerchantService {
         // ========== 4. 调用数据层写入 ==========
         // 如果这里还需要同时写多张表（比如商户 + 门店 + 银行账户），
         // 就在这一个事务里调用多个数据层 Service，这就是 Biz 层存在的意义
-        merchantService.save(merchant);
+        merchantService.insert(merchant);   // qingo 数据层命名：新增叫 insert，不叫 save
 
         // ========== 5. 写操作日志到 MongoDB ==========
         // 业务数据(MySQL)已写入，这里往 MongoDB 记一条「操作日志」。

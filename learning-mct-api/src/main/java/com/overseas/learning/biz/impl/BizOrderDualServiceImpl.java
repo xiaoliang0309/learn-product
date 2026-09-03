@@ -103,7 +103,7 @@ public class BizOrderDualServiceImpl implements BizOrderDualService {
     public void payOrder(Long id) {
         // 1. 更新 MySQL 状态
         tradeOrderMapper.updateStatus(id, 1);
-        TradeOrder order = tradeOrderMapper.selectById(id);
+        TradeOrder order = tradeOrderMapper.getById(id);
         log.info("【双写-MySQL】订单支付: id={}, status=1", id);
 
         // 2. 同步更新 ES 状态
@@ -125,7 +125,7 @@ public class BizOrderDualServiceImpl implements BizOrderDualService {
     @Override
     public Map<String, Object> compareData() {
         // 查 MySQL
-        List<TradeOrder> mysqlList = tradeOrderMapper.selectList(new TradeOrder());
+        List<TradeOrder> mysqlList = tradeOrderMapper.getList(new TradeOrder());
         long mysqlCount = tradeOrderMapper.count(new TradeOrder());
 
         // 查 ES（传空 request = 不带条件，查全部）
@@ -145,7 +145,7 @@ public class BizOrderDualServiceImpl implements BizOrderDualService {
      */
     @Override
     public List<TradeOrder> listFromMysql() {
-        return tradeOrderMapper.selectList(new TradeOrder());
+        return tradeOrderMapper.getList(new TradeOrder());
     }
 
     /**
@@ -170,7 +170,7 @@ public class BizOrderDualServiceImpl implements BizOrderDualService {
      */
     @Override
     public int syncMysqlToEs() {
-        List<TradeOrder> mysqlList = tradeOrderMapper.selectList(new TradeOrder());
+        List<TradeOrder> mysqlList = tradeOrderMapper.getList(new TradeOrder());
         int count = 0;
         for (TradeOrder order : mysqlList) {
             try {

@@ -12,6 +12,7 @@
 
     <!-- ===== 聚合的子模块（每个就是一个微服务）===== -->
     <modules>
+        <module>learning-orm-common</module>     <!-- 公共数据层（对齐 qingo orm-common），先构建 -->
         <module>learning-mct-api</module>        <!-- 服务A：主项目，含 Feign 调用 -->
         <module>learning-merchant-api</module>   <!-- 服务B：被调方 -->
     </modules>

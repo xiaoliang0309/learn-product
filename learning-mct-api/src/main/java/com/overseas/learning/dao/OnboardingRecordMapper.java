@@ -8,11 +8,11 @@ import java.util.List;
 @Mapper
 public interface OnboardingRecordMapper {
 
-    int insert(OnboardingRecord record);
+    int insert(@Param("pojo") OnboardingRecord pojo);
 
-    OnboardingRecord selectById(@Param("id") Long id);
+    OnboardingRecord getById(@Param("id") Long id);
 
-    List<OnboardingRecord> selectByMerchantId(@Param("merchantId") Long merchantId);
+    List<OnboardingRecord> getByMerchantId(@Param("merchantId") Long merchantId);
 
-    int update(OnboardingRecord record);
+    int update(@Param("pojo") OnboardingRecord pojo);
 }

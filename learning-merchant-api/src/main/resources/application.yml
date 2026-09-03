@@ -28,7 +28,8 @@ spring:
 
 # ===== MyBatis 配置 =====
 mybatis:
-  mapper-locations: classpath:mapper/**/*.xml
+  # classpath*（带星号）：扫描所有 jar 里的 mapper 目录（含 learning-orm-common 公共模块）
+  mapper-locations: classpath*:mapper/**/*.xml
   type-aliases-package: com.overseas.learning.entity
   configuration:
     map-underscore-to-camel-case: true

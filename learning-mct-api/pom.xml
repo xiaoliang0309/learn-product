@@ -16,6 +16,12 @@
     <packaging>jar</packaging>
 
     <dependencies>
+        <!-- 公共数据层（entity/dao/数据层Service，对齐 qingo orm-common） -->
+        <dependency>
+            <groupId>com.overseas</groupId>
+            <artifactId>learning-orm-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
         <!-- Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -18,27 +18,27 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="pojo.id">
         INSERT INTO onboarding_record (merchant_id, receive_type, payment_type, form_data, apply_status, created_by)
-        VALUES (#{merchantId}, #{receiveType}, #{paymentType}, #{formData}, #{applyStatus}, #{createdBy})
+        VALUES (#{pojo.merchantId}, #{pojo.receiveType}, #{pojo.paymentType}, #{pojo.formData}, #{pojo.applyStatus}, #{pojo.createdBy})
     </insert>
 
-    <select id="selectById" resultMap="BaseResult">
+    <select id="getById" resultMap="BaseResult">
         SELECT * FROM onboarding_record WHERE id = #{id}
     </select>
 
-    <select id="selectByMerchantId" resultMap="BaseResult">
+    <select id="getByMerchantId" resultMap="BaseResult">
         SELECT * FROM onboarding_record WHERE merchant_id = #{merchantId} ORDER BY created_at DESC
     </select>
 
     <update id="update">
         UPDATE onboarding_record
-        SET apply_status = #{applyStatus},
-            apply_no = #{applyNo},
-            channel_mct_no = #{channelMctNo},
-            remark = #{remark},
+        SET apply_status = #{pojo.applyStatus},
+            apply_no = #{pojo.applyNo},
+            channel_mct_no = #{pojo.channelMctNo},
+            remark = #{pojo.remark},
             updated_at = NOW()
-        WHERE id = #{id}
+        WHERE id = #{pojo.id}
     </update>
 
 </mapper>

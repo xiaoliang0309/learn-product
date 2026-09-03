@@ -79,7 +79,10 @@ spring:
 
 # ===== MyBatis 配置 =====
 mybatis:
-  mapper-locations: classpath:mapper/**/*.xml
+  # classpath*（带星号）：扫描所有 jar 里的 mapper 目录。
+  # MerchantMapper.xml 已抽到 learning-orm-common 模块的 jar 内，
+  # 写成 classpath:（不带星）只能扫本模块 resources，会漏掉公共模块的 XML
+  mapper-locations: classpath*:mapper/**/*.xml
   type-aliases-package: com.overseas.learning.entity
   configuration:
     map-underscore-to-camel-case: true

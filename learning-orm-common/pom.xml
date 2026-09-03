@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ===== 继承父工程 ===== -->
+    <parent>
+        <groupId>com.overseas</groupId>
+        <artifactId>overseas-learning</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <!-- ===== 公共数据层模块（★ 对齐 qingo 的 qingo-svem-biz-orm-common）=====
+         职责：抽「所有服务共享」的数据层代码，只放跟数据库打交道的部分：
+           - entity      实体类（对应表结构）
+           - dao         MyBatis Mapper 接口
+           - dto         数据层查询条件/分页结果（PageResult 等）
+           - service     数据层 Service（单表 CRUD，命名对齐 qingo）
+         不放：业务逻辑（Biz 层）、Controller、配置类。
+         被 learning-mct-api、learning-merchant-api 等服务共同依赖，
+         一处改字段/改 SQL，所有服务生效 —— 这就是 qingo 多模块复用的精髓。 -->
+    <artifactId>learning-orm-common</artifactId>
+    <packaging>jar</packaging>
+
+    <dependencies>
+        <!-- MyBatis（Mapper 接口需要） -->
+        <dependency>
+            <groupId>org.mybatis.spring.boot</groupId>
+            <artifactId>mybatis-spring-boot-starter</artifactId>
+        </dependency>
+        <!-- 分页插件（数据层 pageQuery 用 PageHelper） -->
+        <dependency>
+            <groupId>com.github.pagehelper</groupId>
+            <artifactId>pagehelper-spring-boot-starter</artifactId>
+        </dependency>
+    </dependencies>
+</project>

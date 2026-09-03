@@ -13,17 +13,15 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * 商户「数据层」实现
+ * 商户「数据层」实现（对齐 qingo orm-common 的 XxxServiceImpl）
  *
- * 【对比改造前的变化】
- *   改造前: 邮箱唯一校验、DTO 转换、设默认值、事务都在这里
- *   改造后: 只保留「怎么查、怎么写」的纯数据操作
- *
- * 【注意】
+ * 【职责】只保留「怎么查、怎么写」的纯数据操作：
  *   - 数据层方法一般不加 @Transactional
  *     事务由调用它的 Biz 层方法控制（事务传播 REQUIRED，默认加入已有事务）
  *   - 数据层不做业务校验，即使查到 null 也直接返回，
  *     「不存在怎么办」由 Biz 层决定（抛异常还是返回默认值）
+ *
+ * 【所在模块】learning-orm-common（对齐 qingo-svem-biz-orm-common），多服务共享。
  */
 @Service
 @RequiredArgsConstructor
@@ -33,18 +31,18 @@ public class MerchantServiceImpl implements MerchantService {
 
     @Override
     public Merchant getByEmail(String email) {
-        return merchantMapper.selectByEmail(email);
+        return merchantMapper.getByEmail(email);
     }
 
     @Override
     public Merchant getById(Long id) {
         // 数据层只负责查，查不到返回 null
         // 「查不到算不算错误」由 Biz 层判断
-        return merchantMapper.selectById(id);
+        return merchantMapper.getById(id);
     }
 
     @Override
-    public void save(Merchant merchant) {
+    public void insert(Merchant merchant) {
         merchantMapper.insert(merchant);
     }
 
@@ -70,7 +68,7 @@ public class MerchantServiceImpl implements MerchantService {
         condition.setBizType(query.getBizType());
         condition.setStatus(query.getStatus());
 
-        List<Merchant> list = merchantMapper.selectList(condition);
+        List<Merchant> list = merchantMapper.getList(condition);
         long total = ((Page<Merchant>) list).getTotal();
 
         return PageResult.of(list, total, query.getPage(), query.getSize());

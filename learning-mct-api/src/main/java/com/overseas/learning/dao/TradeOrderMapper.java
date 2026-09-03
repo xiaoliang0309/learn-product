@@ -15,16 +15,16 @@ import java.util.List;
 public interface TradeOrderMapper {
 
     /** 插入并返回自增 ID（id 会回填到 order 对象） */
-    int insert(TradeOrder order);
+    int insert(@Param("pojo") TradeOrder pojo);
 
-    /** 按 ID 查询 */
-    TradeOrder selectById(@Param("id") Long id);
+    /** 按 ID 查询（qingo 命名 getById） */
+    TradeOrder getById(@Param("id") Long id);
 
-    /** 查询列表（带条件筛选） */
-    List<TradeOrder> selectList(TradeOrder order);
+    /** 查询列表（带条件筛选，qingo 命名 getList） */
+    List<TradeOrder> getList(@Param("pojo") TradeOrder pojo);
 
     /** 统计总数 */
-    long count(TradeOrder order);
+    long count(@Param("pojo") TradeOrder pojo);
 
     /** 更新状态（演示支付/退款） */
     int updateStatus(@Param("id") Long id, @Param("status") Integer status);

@@ -17,29 +17,29 @@
         <result column="created_at" property="createdAt"/>
     </resultMap>
 
-    <!-- 插入（自增 ID 回填） -->
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    <!-- 插入（自增 ID 回填，实体参数 pojo） -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="pojo.id">
         INSERT INTO trade_order (order_no, merchant_id, shop_id, amount, currency, receive_type, status, payment_method, created_at)
-        VALUES (#{orderNo}, #{merchantId}, #{shopId}, #{amount}, #{currency}, #{receiveType}, #{status}, #{paymentMethod}, NOW())
+        VALUES (#{pojo.orderNo}, #{pojo.merchantId}, #{pojo.shopId}, #{pojo.amount}, #{pojo.currency}, #{pojo.receiveType}, #{pojo.status}, #{pojo.paymentMethod}, NOW())
     </insert>
 
-    <!-- 按 ID 查询 -->
-    <select id="selectById" resultMap="BaseResult">
+    <!-- 按 ID 查询（qingo 命名 getById） -->
+    <select id="getById" resultMap="BaseResult">
         SELECT * FROM trade_order WHERE id = #{id}
     </select>
 
-    <!-- 条件查询（动态 SQL） -->
-    <select id="selectList" resultMap="BaseResult">
+    <!-- 条件查询（动态 SQL，qingo 命名 getList，实体参数 pojo） -->
+    <select id="getList" resultMap="BaseResult">
         SELECT * FROM trade_order
         <where>
-            <if test="orderNo != null and orderNo != ''">
-                AND order_no = #{orderNo}
+            <if test="pojo.orderNo != null and pojo.orderNo != ''">
+                AND order_no = #{pojo.orderNo}
             </if>
-            <if test="merchantId != null">
-                AND merchant_id = #{merchantId}
+            <if test="pojo.merchantId != null">
+                AND merchant_id = #{pojo.merchantId}
             </if>
-            <if test="status != null">
-                AND status = #{status}
+            <if test="pojo.status != null">
+                AND status = #{pojo.status}
             </if>
         </where>
         ORDER BY created_at DESC
@@ -50,11 +50,11 @@
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM trade_order
         <where>
-            <if test="merchantId != null">
-                AND merchant_id = #{merchantId}
+            <if test="pojo.merchantId != null">
+                AND merchant_id = #{pojo.merchantId}
             </if>
-            <if test="status != null">
-                AND status = #{status}
+            <if test="pojo.status != null">
+                AND status = #{pojo.status}
             </if>
         </where>
     </select>

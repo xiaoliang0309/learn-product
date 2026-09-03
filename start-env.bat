@@ -1,9 +1,9 @@
 @echo off
-title Learning Env Starter (Redis + Kafka + XXL-JOB + Nacos + ES)
+title Learning Env Starter (Redis + MongoDB + Kafka + XXL-JOB + Nacos + ES)
 
 echo ============================================
 echo   Start learning env:
-echo   Redis(6379) + Kafka(9092) + XXL-JOB(9091) + Nacos(8848) + ES(9200)
+echo   Redis(6379) + MongoDB(27017) + Kafka(9092) + XXL-JOB(9091) + Nacos(8848) + ES(9200)
 echo ============================================
 echo.
 
@@ -18,8 +18,19 @@ if %errorlevel%==0 (
 )
 echo.
 
-REM ===== 2. Start Kafka =====
-echo [2/5] Starting Kafka ...
+REM ===== 2. Start MongoDB =====
+echo [2/6] Starting MongoDB ...
+netstat -ano | find ":27017" | find "LISTENING" >nul
+if %errorlevel%==0 (
+    echo       MongoDB already running, skip.
+) else (
+    start "MongoDB" "%~dp0start-mongodb.bat"
+    echo       MongoDB starting at localhost:27017 ...
+)
+echo.
+
+REM ===== 3. Start Kafka =====
+echo [3/6] Starting Kafka ...
 netstat -ano | find ":9092" | find "LISTENING" >nul
 if %errorlevel%==0 (
     echo       Kafka already running, skip.
@@ -30,7 +41,7 @@ if %errorlevel%==0 (
 echo.
 
 REM ===== 3. Start XXL-JOB Admin (scheduler center) =====
-echo [3/5] Starting XXL-JOB Admin ...
+echo [4/6] Starting XXL-JOB Admin ...
 netstat -ano | find ":9091" | find "LISTENING" >nul
 if %errorlevel%==0 (
     echo       XXL-JOB Admin already running, skip.
@@ -41,7 +52,7 @@ if %errorlevel%==0 (
 echo.
 
 REM ===== 4. Start Nacos (registry/config center) =====
-echo [4/5] Starting Nacos ...
+echo [5/6] Starting Nacos ...
 netstat -ano | find ":8848" | find "LISTENING" >nul
 if %errorlevel%==0 (
     echo       Nacos already running, skip.
@@ -52,7 +63,7 @@ if %errorlevel%==0 (
 echo.
 
 REM ===== 5. Start Elasticsearch =====
-echo [5/5] Starting Elasticsearch ...
+echo [6/6] Starting Elasticsearch ...
 netstat -ano | find ":9200" | find "LISTENING" >nul
 if %errorlevel%==0 (
     echo       ES already running, skip.
@@ -65,6 +76,7 @@ echo.
 echo ============================================
 echo   Done! Services:
 echo   - Redis        : 127.0.0.1:6379
+echo   - MongoDB      : localhost:27017
 echo   - Kafka        : localhost:9092
 echo   - XXL-JOB Admin: http://localhost:9091/xxl-job-admin  (admin/123456)
 echo   - Nacos        : http://localhost:8848/nacos  (nacos/nacos)

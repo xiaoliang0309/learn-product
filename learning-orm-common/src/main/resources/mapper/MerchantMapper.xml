@@ -21,29 +21,29 @@
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
-    <!-- 插入（自增 ID 回填） -->
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    <!-- 插入（自增 ID 回填）。实体参数注解是 @Param("pojo")，所以用 pojo.xxx 取值 -->
+    <insert id="insert" useGeneratedKeys="true" keyProperty="pojo.id">
         INSERT INTO merchant (full_name, short_name, biz_type, currency, country, state, city, address, email, phone, status)
-        VALUES (#{fullName}, #{shortName}, #{bizType}, #{currency}, #{country}, #{state}, #{city}, #{address}, #{email}, #{phone}, 1)
+        VALUES (#{pojo.fullName}, #{pojo.shortName}, #{pojo.bizType}, #{pojo.currency}, #{pojo.country}, #{pojo.state}, #{pojo.city}, #{pojo.address}, #{pojo.email}, #{pojo.phone}, 1)
     </insert>
 
-    <!-- 按 ID 查询 -->
-    <select id="selectById" resultMap="BaseResult">
+    <!-- 按 ID 查询（qingo 命名 getById） -->
+    <select id="getById" resultMap="BaseResult">
         SELECT * FROM merchant WHERE id = #{id}
     </select>
 
-    <!-- 条件查询（动态 SQL） -->
-    <select id="selectList" resultMap="BaseResult">
+    <!-- 条件查询（动态 SQL，qingo 命名 getList，实体参数 pojo） -->
+    <select id="getList" resultMap="BaseResult">
         SELECT * FROM merchant
         <where>
-            <if test="fullName != null and fullName != ''">
-                AND full_name LIKE CONCAT('%', #{fullName}, '%')
+            <if test="pojo.fullName != null and pojo.fullName != ''">
+                AND full_name LIKE CONCAT('%', #{pojo.fullName}, '%')
             </if>
-            <if test="bizType != null">
-                AND biz_type = #{bizType}
+            <if test="pojo.bizType != null">
+                AND biz_type = #{pojo.bizType}
             </if>
-            <if test="status != null">
-                AND status = #{status}
+            <if test="pojo.status != null">
+                AND status = #{pojo.status}
             </if>
         </where>
         ORDER BY created_at DESC
@@ -53,14 +53,14 @@
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM merchant
         <where>
-            <if test="fullName != null and fullName != ''">
-                AND full_name LIKE CONCAT('%', #{fullName}, '%')
+            <if test="pojo.fullName != null and pojo.fullName != ''">
+                AND full_name LIKE CONCAT('%', #{pojo.fullName}, '%')
             </if>
-            <if test="bizType != null">
-                AND biz_type = #{bizType}
+            <if test="pojo.bizType != null">
+                AND biz_type = #{pojo.bizType}
             </if>
-            <if test="status != null">
-                AND status = #{status}
+            <if test="pojo.status != null">
+                AND status = #{pojo.status}
             </if>
         </where>
     </select>
@@ -68,17 +68,17 @@
     <!-- 更新 -->
     <update id="update">
         UPDATE merchant
-        SET full_name = #{fullName},
-            short_name = #{shortName},
-            biz_type = #{bizType},
-            country = #{country},
-            state = #{state},
-            city = #{city},
-            address = #{address},
-            email = #{email},
-            phone = #{phone},
+        SET full_name = #{pojo.fullName},
+            short_name = #{pojo.shortName},
+            biz_type = #{pojo.bizType},
+            country = #{pojo.country},
+            state = #{pojo.state},
+            city = #{pojo.city},
+            address = #{pojo.address},
+            email = #{pojo.email},
+            phone = #{pojo.phone},
             updated_at = NOW()
-        WHERE id = #{id}
+        WHERE id = #{pojo.id}
     </update>
 
     <!-- 删除 -->
@@ -86,8 +86,8 @@
         DELETE FROM merchant WHERE id = #{id}
     </delete>
 
-    <!-- 按邮箱查询 -->
-    <select id="selectByEmail" resultMap="BaseResult">
+    <!-- 按邮箱查询（qingo 命名 getByEmail） -->
+    <select id="getByEmail" resultMap="BaseResult">
         SELECT * FROM merchant WHERE email = #{email} LIMIT 1
     </select>
 
