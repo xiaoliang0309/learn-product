@@ -99,6 +99,10 @@ pagehelper:
 logging:
   level:
     com.overseas.learning: DEBUG
+  pattern:
+    # 控制台日志格式：在级别后面加 [%X{reqId}]，输出 MDC 里的 reqId（WebLogAspect 塞的）。
+    # 这样一次请求经过的 Controller/Biz/数据层日志都带同一个 reqId，方便按 ID 串起完整链路。
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%X{reqId}] ${PID:- } --- [%15.15t] %-40.40logger{39} : %m%n"
 
 # ===== xxl-job 执行器配置 =====
 # 执行器 = 你的项目（负责真正干活）；调度中心 = xxl-job-admin（负责到点下发命令）
