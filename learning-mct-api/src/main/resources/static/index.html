@@ -57,6 +57,7 @@
         <div class="tab active" onclick="switchTab('merchant', this)">商户管理</div>
         <div class="tab" onclick="switchTab('onboarding', this)">进件管理</div>
         <div class="tab" onclick="switchTab('order', this)">订单通知(Kafka)</div>
+        <div class="tab" onclick="switchTab('rocketmq', this)">分账消息(RocketMQ)</div>
         <div class="tab" onclick="switchTab('auth', this)">登录拦截(拦截器)</div>
         <div class="tab" onclick="switchTab('feign', this)">微服务(Feign)</div>
         <div class="tab" onclick="switchTab('mongo', this)">操作日志(MongoDB)</div>
@@ -149,6 +150,61 @@
         <div class="card">
             <h2>已下单记录（本次会话）</h2>
             <div id="order-list"><p style="color:#999">暂无订单，点击上方「下单」触发 Kafka 消息</p></div>
+        </div>
+    </div>
+
+    <!-- ===== 分账消息（RocketMQ）Tab ===== -->
+    <div id="tab-rocketmq" class="tab-content">
+        <div class="card">
+            <h2>分账完成异步通知（RocketMQ，对齐 qingo）</h2>
+            <p style="color:#999;font-size:13px;margin-bottom:12px">
+                对应 qingo 真实场景：订单分账完成后发 RocketMQ 消息（topic-order-divide-complete-mp），
+                后台消费者异步「记账/结算」，失败自动重试、16 次后进死信队列 DLQ。
+            </p>
+
+            <!-- 开关状态提示：默认未开启 -->
+            <div style="background:#fff8e6;border:1px solid #ffe0a3;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#8a6d1a">
+                ⚠️ <b>本演示默认「纯代码不连真服务」</b>（spring.rocketmq.enabled=false），点下方按钮会返回「未开启」提示。
+                <br>想真实收发：本机起 RocketMQ NameServer(9876)+Broker，把 <code>application.yml</code> 的
+                <code>spring.rocketmq.enabled</code> 改 <code>true</code> 重启即可。
+            </div>
+
+            <div class="form-row">
+                <input id="r-merchantId" placeholder="商户ID *" value="1">
+                <input id="r-merchantName" placeholder="商户名称 *" value="测试商户">
+            </div>
+            <button class="btn-primary" onclick="sendRocketmq()">下单并触发分账消息</button>
+            <div id="rocketmq-result" style="margin-top:12px"></div>
+        </div>
+
+        <!-- RocketMQ vs Kafka 对照表 -->
+        <div class="card">
+            <h2>RocketMQ vs Kafka（qingo 怎么选）</h2>
+            <table style="width:100%;font-size:13px;border-collapse:collapse">
+                <tr style="background:#f5f7fa">
+                    <th style="text-align:left;padding:8px;border:1px solid #e4e7ed">维度</th>
+                    <th style="text-align:left;padding:8px;border:1px solid #e4e7ed">Kafka</th>
+                    <th style="text-align:left;padding:8px;border:1px solid #e4e7ed">RocketMQ</th>
+                </tr>
+                <tr><td style="padding:8px;border:1px solid #e4e7ed">延迟消息</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed">❌ 不支持</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed">✅ 18 级延迟，开箱即用 → <b>延迟关单用它</b></td></tr>
+                <tr><td style="padding:8px;border:1px solid #e4e7ed">失败重试/死信</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed">手动 ack，重试要自实现</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed">自带重试16次+DLQ → <b>分账可靠投递用它</b></td></tr>
+                <tr><td style="padding:8px;border:1px solid #e4e7ed">吞吐量</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed">超高（日志/埋点首选）</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed">高</td></tr>
+                <tr><td style="padding:8px;border:1px solid #e4e7ed">qingo 用量</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed"><b>主力</b>：@KafkaListener 102 处 / 44 个模块</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed">补充：5 处，仅分账/延迟关单</td></tr>
+                <tr><td style="padding:8px;border:1px solid #e4e7ed">消费者写法</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed"><code>@KafkaListener</code> 标方法 + 手动 ack</td>
+                    <td style="padding:8px;border:1px solid #e4e7ed"><code>@RocketMQMessageListener</code> 标类 + 实现 <code>RocketMQListener</code></td></tr>
+            </table>
+            <p style="color:#999;font-size:12px;margin-top:10px">
+                结论：Kafka 是「通用大水管」，RocketMQ 是「带延迟+可靠投递的专用管」。qingo 99% 走 Kafka。
+            </p>
         </div>
     </div>
 
@@ -806,6 +862,30 @@ function addOrderToList(orderNo, merchantName) {
         <td>${time}</td>
         <td><span class="badge badge-success">消息已发送</span></td>`;
     table.querySelector('tbody').prepend(tr);
+}
+
+// ===== 分账消息（RocketMQ） =====
+async function sendRocketmq() {
+    const merchantId = document.getElementById('r-merchantId').value;
+    const merchantName = document.getElementById('r-merchantName').value;
+    const box = document.getElementById('rocketmq-result');
+    if (!merchantId || !merchantName) {
+        showToast('❌ 请填写商户ID和商户名称', 'error');
+        return;
+    }
+    const url = BASE + '/api/rocketmq/divide?merchantId=' + encodeURIComponent(merchantId)
+              + '&merchantName=' + encodeURIComponent(merchantName);
+    const res = await fetch(url, { method: 'POST' });
+    const data = await res.json();
+    if (data.code === 0) {
+        box.innerHTML = `<div style="background:#f0f9eb;border:1px solid #c2e7b0;border-radius:6px;padding:10px 14px;font-size:13px;color:#3a7d1f">
+            ✅ ${data.data}<br><span style="color:#999">请到后端控制台看【RocketMQ-消费者】日志（异步线程触发）</span></div>`;
+        showToast('已发 RocketMQ 消息', 'success');
+    } else {
+        box.innerHTML = `<div style="background:#fef0f0;border:1px solid #fbc4c4;border-radius:6px;padding:10px 14px;font-size:13px;color:#a33">
+            ${data.msg || data.message}</div>`;
+        showToast('RocketMQ 未开启，纯看代码模式', 'info');
+    }
 }
 
 // ===== 登录拦截演示（拦截器 + @CurrentUser） =====

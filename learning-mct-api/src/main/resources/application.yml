@@ -64,6 +64,16 @@ spring:
     listener:
       ack-mode: manual                     # 手动确认，配合上面的 Acknowledgment
 
+  # ===== RocketMQ 配置（对齐 qingo，默认关闭：本机没装 RocketMQ 也能正常启动）=====
+  # qingo 用它的场景很聚焦：分账可靠投递(topic-order-divide-complete-mp)、延迟关单(topic-order-delay-cancel-mp)
+  # 想用真服务演示时：本机起 NameServer(9876)+Broker，把下面 enabled 改 true 即可
+  rocketmq:
+    enabled: false                          # ★ 开关：false=不装配生产者/消费者，纯看代码不连服务
+    name-server: localhost:9876             # RocketMQ 的「注册中心」，类比 Kafka 的 bootstrap-servers
+    producer:
+      group: overseas-learning-producer     # 生产者组
+      send-message-timeout: 3000
+
   # ===== Elasticsearch 配置（本机 localhost:9200，HTTP 接口）=====
   # qingo 的配置在 Nacos 上，写法一样：spring.elasticsearch.uris
   # 本地学习用，连不上 ES 不影响其他功能，只是 ES 相关接口报错
